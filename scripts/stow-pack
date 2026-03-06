@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  cat >&2 <<'USAGE'
+Usage: stow-pack [stow options] <package> [package...]
+
+Examples:
+  stow-pack hypr
+  stow-pack --restow hypr
+  stow-pack --delete hypr
+  stow-pack hypr waybar
+USAGE
+  exit 1
+fi
+
+if ! command -v stow >/dev/null 2>&1; then
+  echo "Error: GNU Stow is not installed" >&2
+  exit 1
+fi
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+stow --dir "$repo_root" --target "$HOME" "$@"

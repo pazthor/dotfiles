@@ -95,6 +95,86 @@ Check repo status quickly:
 ~/Code/dotfiles/scripts/status
 ```
 
+Run stow with repo defaults (`--dir ~/Code/dotfiles --target ~`):
+
+```bash
+~/Code/dotfiles/scripts/stow-pack --restow hypr
+```
+
+## Using GNU Stow with `scripts/adopt-config`
+
+`scripts/adopt-config` and Stow work well together when you split responsibilities:
+
+- `adopt-config`: import an existing local file into this repo without losing your current setup.
+- `stow`: recreate all symlinks cleanly on the same machine later, or on a new machine after cloning.
+
+### 1. Install Stow
+
+Examples:
+
+```bash
+# Arch
+sudo pacman -S stow
+
+# Debian/Ubuntu
+sudo apt install stow
+```
+
+### 2. Recommended Stow package layout
+
+Create package directories at repo root (one package per tool/topic):
+
+```text
+~/Code/dotfiles/
+├── hypr/
+│   └── .config/hypr/...
+├── waybar/
+│   └── .config/waybar/...
+└── scripts/
+```
+
+### 3. Adopt first, then move into a Stow package
+
+Example for `~/.config/hypr/hyprsunset.conf`:
+
+```bash
+# 1) Adopt with your helper script
+~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/hyprsunset.conf
+
+# 2) Move adopted file into a Stow package
+mkdir -p ~/Code/dotfiles/hypr/.config/hypr
+mv ~/Code/dotfiles/.config/hypr/hyprsunset.conf \
+  ~/Code/dotfiles/hypr/.config/hypr/hyprsunset.conf
+
+# 3) Replace old direct symlink with a Stow-managed symlink
+rm ~/.config/hypr/hyprsunset.conf
+stow --dir ~/Code/dotfiles --target ~ hypr
+```
+
+After this, the file is managed by Stow package `hypr`.
+
+### 4. Daily workflow with Stow
+
+```bash
+# Re-apply package links after file moves/renames
+~/Code/dotfiles/scripts/stow-pack --restow hypr
+
+# Remove package links
+~/Code/dotfiles/scripts/stow-pack --delete hypr
+```
+
+### 5. Bootstrap on a new machine
+
+After cloning this repo:
+
+```bash
+~/Code/dotfiles/scripts/stow-pack hypr
+# add more packages as you create them, for example:
+# ~/Code/dotfiles/scripts/stow-pack waybar
+```
+
+Tip: avoid storing dotfiles directly in repo root once you start using Stow packages. Keep them under package folders (`hypr/`, `waybar/`, etc.) so `stow` can manage them consistently.
+
 ## Notes
 
 - Do not edit files inside `~/.local/share/omarchy/` (those are managed by Omarchy updates).
