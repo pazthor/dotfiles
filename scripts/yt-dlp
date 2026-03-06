@@ -1,0 +1,2 @@
+yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" -o "%(title)s.%(ext)s"
+yt-dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" --merge-output-format mp4 https://youtube.com/shorts/a6PL8pVn24Q?si=Cqiyj0nULXXgGMMn

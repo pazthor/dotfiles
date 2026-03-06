@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+readme="$repo_root/README.md"
+
+if [[ ! -f "$readme" ]]; then
+  echo "README not found: $readme" >&2
+  exit 1
+fi
+
+cat <<'SUMMARY'
+Dotfiles helper (Omarchy overrides)
+
+Quick summary:
+1) Edit your real config file (e.g., ~/.config/hypr/bindings.conf)
+2) Adopt it: ~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
+3) Commit changes: git -C ~/Code/dotfiles status && git -C ~/Code/dotfiles commit -m "message"
+
+Full tutorial below:
+SUMMARY
+
+tail -n +1 -- "$readme"
