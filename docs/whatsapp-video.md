@@ -1,6 +1,6 @@
 # whatsapp-video helper
 
-`whatsapp-video` converts any input video into a WhatsApp-friendly MP4 so it can be shared without the app recompressing it into a blurry mess. The script lives in `commands/whatsapp-video/whatsapp-video` and is symlinked into `bin/` so it is available once the dotfiles are stowed.
+`whatsapp-video` converts any input video into a WhatsApp-friendly MP4 so it can be shared without the app recompressing it into a blurry mess. The script lives in `config/.local/bin/whatsapp-video` as a first-class executable managed directly by chezmoi.
 
 ## Prerequisites
 
@@ -36,4 +36,4 @@ The command prints the target bitrate budget and writes `~/Videos/presentation-w
 
 - You can run `whatsapp-video` on already small clips to normalize them for WhatsApp without size reduction.
 - For ultra-short clips (≤ 10 seconds) increase `--max-size` to bump quality if the default looks soft.
-- If you need audio-only, use `ydp --audio` from `commands/tui/ydp` instead of this helper.
+- If you need audio-only, use `ydp --audio` from `config/.local/bin/ydp` instead of this helper.
