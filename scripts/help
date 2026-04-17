@@ -15,9 +15,10 @@ cat <<'SUMMARY'
 Dotfiles helper (Omarchy overrides)
 
 Quick summary:
-1) Edit your real config file (e.g., ~/.config/hypr/bindings.conf)
-2) Adopt it: ~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
-3) Commit changes: git -C ~/Code/dotfiles status && git -C ~/Code/dotfiles commit -m "message"
+1) Preview mappings: ~/Code/dotfiles/scripts/adopt-verify
+2) Edit your real config file (e.g., ~/.config/hypr/bindings.conf)
+3) Adopt it: ~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
+4) Commit changes: git -C ~/Code/dotfiles status && git -C ~/Code/dotfiles commit -m "message"
 
 Full tutorial below:
 SUMMARY
