@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v chezmoi >/dev/null 2>&1; then
+  echo "Error: chezmoi is not installed" >&2
+  exit 1
+fi
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+chezmoi init --source="$repo_root"
+chezmoi status
+
+echo "Initialized chezmoi with source: $repo_root"
+echo "Review pending changes with: chezmoi diff"
