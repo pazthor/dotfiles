@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v chezmoi >/dev/null 2>&1; then
+  echo "Error: chezmoi is not installed" >&2
+  exit 1
+fi
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+source_dir="$repo_root/config"
+
+if [[ ! -d "$source_dir" ]]; then
+  echo "Error: expected chezmoi source directory at $source_dir" >&2
+  exit 1
+fi
+
+chezmoi --source "$source_dir" diff
+chezmoi --source "$source_dir" apply "$@"

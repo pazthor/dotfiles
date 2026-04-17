@@ -18,14 +18,17 @@ The script will:
 
 ## Layout
 
-The repo mirrors your home directory structure so symlinks remain simple.
+chezmoi source files live under `config/`, and helper scripts live under `scripts/`.
 
 ```
 ~/Code/dotfiles/
-├── .config/
-│   └── ...
+├── config/
+│   ├── .config/
+│   ├── bin/
+│   └── commands/
 └── scripts/
-    └── adopt-config
+    ├── adopt-config
+    └── chezmoi-sync
 ```
 
 ## Tutorial
@@ -95,85 +98,69 @@ Check repo status quickly:
 ~/Code/dotfiles/scripts/status
 ```
 
-Run stow with repo defaults (`--dir ~/Code/dotfiles --target ~`):
+Sync dotfiles with chezmoi (diff + apply):
 
 ```bash
-~/Code/dotfiles/scripts/stow-pack --restow hypr
+~/Code/dotfiles/scripts/chezmoi-sync
 ```
 
-## Using GNU Stow with `scripts/adopt-config`
+## Using chezmoi with this repository
 
-`scripts/adopt-config` and Stow work well together when you split responsibilities:
+Daily management now uses chezmoi with the repo's real source layout at `~/Code/dotfiles/config`.
 
-- `adopt-config`: import an existing local file into this repo without losing your current setup.
-- `stow`: recreate all symlinks cleanly on the same machine later, or on a new machine after cloning.
-
-### 1. Install Stow
+### 1. Install chezmoi
 
 Examples:
 
 ```bash
 # Arch
-sudo pacman -S stow
+sudo pacman -S chezmoi
 
 # Debian/Ubuntu
-sudo apt install stow
+sudo apt install chezmoi
 ```
 
-### 2. Recommended Stow package layout
+### 2. Initialize chezmoi to this source tree
 
-Create package directories at repo root (one package per tool/topic):
+After cloning this repo on a machine:
+
+```bash
+chezmoi init --source ~/Code/dotfiles/config
+```
+
+### 3. Apply current configuration
+
+```bash
+~/Code/dotfiles/scripts/chezmoi-sync
+```
+
+This wrapper runs:
+
+- `chezmoi --source ~/Code/dotfiles/config diff`
+- `chezmoi --source ~/Code/dotfiles/config apply`
+
+### 4. Import an existing file and keep symlink targets
+
+```bash
+chezmoi --source ~/Code/dotfiles/config add --follow ~/.config/hypr/hyprsunset.conf
+```
+
+### 5. Work inside the managed source directory
+
+```bash
+chezmoi --source ~/Code/dotfiles/config cd
+```
+
+Repository modules managed by chezmoi:
 
 ```text
-~/Code/dotfiles/
-├── hypr/
-│   └── .config/hypr/...
-├── waybar/
-│   └── .config/waybar/...
-└── scripts/
+~/Code/dotfiles/config/
+├── .config/
+├── bin/
+└── commands/
 ```
 
-### 3. Adopt first, then move into a Stow package
-
-Example for `~/.config/hypr/hyprsunset.conf`:
-
-```bash
-# 1) Adopt with your helper script
-~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/hyprsunset.conf
-
-# 2) Move adopted file into a Stow package
-mkdir -p ~/Code/dotfiles/hypr/.config/hypr
-mv ~/Code/dotfiles/.config/hypr/hyprsunset.conf \
-  ~/Code/dotfiles/hypr/.config/hypr/hyprsunset.conf
-
-# 3) Replace old direct symlink with a Stow-managed symlink
-rm ~/.config/hypr/hyprsunset.conf
-stow --dir ~/Code/dotfiles --target ~ hypr
-```
-
-After this, the file is managed by Stow package `hypr`.
-
-### 4. Daily workflow with Stow
-
-```bash
-# Re-apply package links after file moves/renames
-~/Code/dotfiles/scripts/stow-pack --restow hypr
-
-# Remove package links
-~/Code/dotfiles/scripts/stow-pack --delete hypr
-```
-
-### 5. Bootstrap on a new machine
-
-After cloning this repo:
-
-```bash
-~/Code/dotfiles/scripts/stow-pack hypr
-# add more packages as you create them, for example:
-# ~/Code/dotfiles/scripts/stow-pack waybar
-```
-
-Tip: avoid storing dotfiles directly in repo root once you start using Stow packages. Keep them under package folders (`hypr/`, `waybar/`, etc.) so `stow` can manage them consistently.
+See `docs/chezmoi.md` for migration steps and operational details.
 
 ## Notes
 
