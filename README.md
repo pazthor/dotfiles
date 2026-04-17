@@ -127,6 +127,25 @@ Run stow with repo defaults (`--dir ~/Code/dotfiles --target ~`):
 ~/Code/dotfiles/scripts/stow-pack --restow hypr
 ```
 
+
+## Migration lifecycle (chezmoi)
+
+Use the explicit lifecycle commands in `makefile` when migrating tracked config into chezmoi:
+
+```bash
+make migrate-inventory
+make migrate-import
+make migrate-diff
+make migrate-apply
+make migrate-verify
+```
+
+- `migrate-inventory`: generate `.cache/chezmoi-migration-manifest.txt` from tracked config paths.
+- `migrate-import`: run `chezmoi add --follow` for each manifest entry.
+- `migrate-diff`: preview pending changes.
+- `migrate-apply`: enforce managed state.
+- `migrate-verify`: report missing paths or paths that are no longer symlinks.
+
 ## Using GNU Stow with `scripts/adopt-config`
 
 `scripts/adopt-config` and Stow work well together when you split responsibilities:
