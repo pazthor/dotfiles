@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_name=$(basename "$0")
+
+usage() {
+  cat <<USAGE
+Usage:
+  $script_name inventory [path ...]
+  $script_name add-follow <path>
+  $script_name review
+  $script_name apply [--yes]
+
+Commands:
+  inventory   List candidate files that are not yet managed by chezmoi.
+              Defaults to: ~/.config ~/.bashrc ~/.zshrc ~/.gitconfig
+  add-follow  Safely run: chezmoi add --follow <path>
+  review      Run: chezmoi diff
+  apply       Review + apply changes. Prompts unless --yes is passed.
+USAGE
+}
+
+require_chezmoi() {
+  if ! command -v chezmoi >/dev/null 2>&1; then
+    echo "Error: chezmoi is not installed or not in PATH" >&2
+    exit 1
+  fi
+}
+
+abs_path() {
+  local p=$1
+  p=${p/#\~/$HOME}
+  readlink -f -- "$p"
+}
+
+inventory_cmd() {
+  require_chezmoi
+
+  local -a roots
+  if [[ $# -gt 0 ]]; then
+    roots=("$@")
+  else
+    roots=("$HOME/.config" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.gitconfig")
+  fi
+
+  local -a managed=()
+  while IFS= read -r managed_path; do
+    managed+=("$managed_path")
+  done < <(chezmoi managed --path-style absolute 2>/dev/null || true)
+
+  if [[ ${#managed[@]} -eq 0 ]]; then
+    echo "Warning: no managed files detected (or chezmoi source state is empty)." >&2
+  fi
+
+  local tmpfile
+  tmpfile=$(mktemp)
+  printf '%s\n' "${managed[@]}" > "$tmpfile"
+
+  local root expanded
+  for root in "${roots[@]}"; do
+    expanded=${root/#\~/$HOME}
+
+    if [[ -d "$expanded" ]]; then
+      find "$expanded" -type f 2>/dev/null
+    elif [[ -f "$expanded" ]]; then
+      printf '%s\n' "$expanded"
+    else
+      echo "Skipping missing path: $root" >&2
+    fi
+  done | sort -u | while IFS= read -r candidate; do
+    if ! grep -Fxq -- "$candidate" "$tmpfile"; then
+      printf '%s\n' "$candidate"
+    fi
+  done
+
+  rm -f -- "$tmpfile"
+}
+
+add_follow_cmd() {
+  require_chezmoi
+
+  if [[ $# -ne 1 ]]; then
+    echo "Usage: $script_name add-follow <path>" >&2
+    exit 1
+  fi
+
+  local input_path source_path
+  input_path=$1
+  input_path=${input_path/#\~/$HOME}
+
+  if [[ ! -e "$input_path" ]]; then
+    echo "Error: file not found: $input_path" >&2
+    exit 1
+  fi
+
+  source_path=$(abs_path "$input_path")
+
+  if [[ "$source_path" != "$HOME"/* ]]; then
+    echo "Error: only paths under $HOME are supported" >&2
+    exit 1
+  fi
+
+  echo "Adding with chezmoi (follow symlink targets when relevant):"
+  echo "  chezmoi add --follow $source_path"
+  chezmoi add --follow -- "$source_path"
+
+  echo
+  echo "Next steps:"
+  echo "  1) Review: $script_name review"
+  echo "  2) Apply:  $script_name apply"
+}
+
+review_cmd() {
+  require_chezmoi
+  chezmoi diff
+}
+
+apply_cmd() {
+  require_chezmoi
+
+  local assume_yes=false
+  if [[ ${1:-} == "--yes" ]]; then
+    assume_yes=true
+    shift
+  fi
+
+  if [[ $# -ne 0 ]]; then
+    echo "Usage: $script_name apply [--yes]" >&2
+    exit 1
+  fi
+
+  echo "Reviewing pending changes..."
+  chezmoi diff || true
+
+  if [[ "$assume_yes" != true ]]; then
+    read -r -p "Apply these changes now with 'chezmoi apply'? [y/N] " reply
+    if [[ ! "$reply" =~ ^[Yy]$ ]]; then
+      echo "Aborted. No changes applied."
+      exit 0
+    fi
+  fi
+
+  chezmoi apply
+}
+
+cmd=${1:-}
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+
+case "$cmd" in
+  inventory) inventory_cmd "$@" ;;
+  add-follow) add_follow_cmd "$@" ;;
+  review) review_cmd "$@" ;;
+  apply) apply_cmd "$@" ;;
+  -h|--help|help|"") usage ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
