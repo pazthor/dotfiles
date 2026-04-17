@@ -1,94 +1,49 @@
-# Managing Dotfiles with GNU Stow
+# Dotfiles Migration Lifecycle (chezmoi)
 
-This repository mirrors the layout of files once they are linked into `$HOME`. GNU Stow keeps the tree tidy by creating symlinks instead of copying files. The walkthrough below shows the standard workflow for applying and maintaining this configuration.
+This repository now standardizes migration work through explicit `make` targets backed by `chezmoi`.
 
-## Prerequisites
+## Command Surface
 
-- Ensure GNU Stow is installed (`sudo apt install stow`, `brew install stow`, etc.).
-- Run all commands from the repository root (the directory containing `home/`, `config/`, `bin/`, and any `hosts/<hostname>/` overrides).
-
-## Apply Core Modules
+Run from repo root:
 
 ```sh
-stow --target="$HOME" home config bin
+make migrate-inventory  # generate manifest of candidate files
+make migrate-import     # run `chezmoi add --follow` for each manifest entry
+make migrate-diff       # inspect pending chezmoi changes
+make migrate-apply      # apply managed state to $HOME
+make migrate-verify     # check for missing paths / non-symlink targets
 ```
 
-- Links the shared shell, editor, and helper scripts into your home directory.
-- Run this command whenever new files are added under those modules.
+## Typical Workflow
 
-## Dry Runs During Review
-
-```sh
-stow --no --target="$HOME" home config bin
-```
-
-- Adds the `--no` flag to preview what would be linked without touching the filesystem.
-- Useful for verifying changes or reviewing a pull request locally.
-
-## Host-Specific Overlays
-
-```sh
-stow --target="$HOME" hosts/"$(hostname)"
-```
-
-- Applies machine-specific tweaks from `hosts/<hostname>/`.
-- Create a new host directory when a machine needs overrides that shouldn't be shared globally.
-
-## Linking Individual Modules
-
-You can scope Stow to a single module when experimenting or rolling out new files:
-
-```sh
-stow --target="$HOME" config/nvim
-stow --target="$HOME" bin
-```
-
-- Each subdirectory under `home/`, `config/`, or `bin/` can be managed independently.
-- Mix and match modules to suit a minimal setup on remote hosts or servers.
-
-## Removing Symlinks Cleanly
-
-```sh
-stow --delete --target="$HOME" config/nvim
-```
-
-- Removes symlinks created by the matching `stow` command without touching the source files in the repo.
-- Use this when deprecating a module or rolling back a change.
-
-## Adding an Existing Config File to the Repo
-
-When a config file already exists on the system (e.g., `~/.config/hypr/looknfeel.conf`) and you want to start tracking it in this dotfiles repo:
-
-1. **Copy or move** the file into the repo under its mirrored path:
+1. **Generate inventory**
    ```sh
-   cp ~/.config/hypr/looknfeel.conf .config/hypr/looknfeel.conf
+   make migrate-inventory
    ```
-   Or let `make stow-adopt` do it automatically (see step 3).
+   Review `.cache/chezmoi-migration-manifest.txt` and remove anything you don't want to import.
 
-2. **Verify** the repo path mirrors `$HOME` (e.g., `.config/hypr/` → `~/.config/hypr/`).
-
-3. **Adopt and link** in one step — stow will move the real file into the repo and replace it with a symlink:
+2. **Import into chezmoi source state**
    ```sh
-   make stow-adopt
-   # Equivalent: stow --verbose --adopt --no-folding . --target=$HOME
+   make migrate-import
    ```
 
-4. **Commit** the new file:
+3. **Review**
    ```sh
-   git add .config/hypr/looknfeel.conf
-   git commit -m "feat(hypr): track looknfeel overrides"
+   make migrate-diff
    ```
 
-5. **Verify** the symlink:
+4. **Apply**
    ```sh
-   ls -la ~/.config/hypr/looknfeel.conf
-   # Expected: ... -> ../../Code/dotfiles-omarchy/.config/hypr/looknfeel.conf
+   make migrate-apply
    ```
 
-> **Note:** `--adopt` can overwrite repo files with whatever is on disk. Only use it when the on-disk version is the one you want to keep, or when the repo file is identical.
+5. **Verify**
+   ```sh
+   make migrate-verify
+   ```
 
-## Maintenance Tips
+## Notes
 
-- After editing package manifests or bootstrap scripts, run `scripts/bootstrap --dry-run` and then re-run the relevant `stow` command.
-- Keep secrets or machine-local files untracked; add `.example` templates if setup requires manual values.
-- Run `stow` again after pulling updates to ensure new files are linked.
+- `migrate-import` depends on `migrate-inventory`, so the manifest always refreshes first.
+- `migrate-verify` fails if inventory paths are missing or no longer symlinks.
+- The historical typo target `adot-config` is still available as a deprecated alias for `adopt-config`.
