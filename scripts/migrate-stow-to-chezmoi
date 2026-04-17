@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_name=$(basename "$0")
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+manifest_path=""
+manifest_format="json"
+mode="dry-run"
+
+# Directories that are not stow packages.
+declare -a package_excludes=(
+  ".git"
+  ".github"
+  ".idea"
+  ".vscode"
+  "docs"
+  "scripts"
+)
+
+# File/path globs excluded from discovery by default.
+declare -a file_excludes=(
+  "*.age"
+  "*.gpg"
+  "*.key"
+  "*.pem"
+  "*.sops.*"
+  "*.tmp"
+  "*.swp"
+  "*.bak"
+  ".DS_Store"
+)
+
+declare -a include_packages=()
+declare -a user_excludes=()
+
+usage() {
+  cat <<USAGE
+Usage: $script_name [options]
+
+Modes:
+  --dry-run           Discover files, write manifest, print planned commands (default)
+  --import            Discover files, write manifest, and run chezmoi add --follow
+
+Options:
+  --manifest PATH     Required. Manifest output path.
+  --format FORMAT     Manifest format: json or csv (default: json)
+  --package DIR       Include only this package dir (repeatable)
+  --exclude GLOB      Exclude files by glob relative to package root (repeatable)
+  --help              Show this help message
+
+Examples:
+  $script_name --dry-run --manifest /tmp/migration.json
+  $script_name --import --format csv --manifest ./stow-manifest.csv
+  $script_name --package config --exclude '*.age' --manifest ./manifest.json
+USAGE
+}
+
+log_info() {
+  printf '[INFO] %s\n' "$*"
+}
+
+log_warn() {
+  printf '[WARN] %s\n' "$*" >&2
+}
+
+log_error() {
+  printf '[ERROR] %s\n' "$*" >&2
+}
+
+require_cmd() {
+  local cmd=$1
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    log_error "Required command not found: $cmd"
+    exit 1
+  fi
+}
+
+is_excluded_file() {
+  local rel=$1
+  local pattern
+
+  for pattern in "${file_excludes[@]}"; do
+    if [[ "$rel" == $pattern ]]; then
+      return 0
+    fi
+  done
+
+  for pattern in "${user_excludes[@]}"; do
+    if [[ "$rel" == $pattern ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+discover_packages() {
+  local -a packages=()
+  local entry base skip
+
+  while IFS= read -r -d '' entry; do
+    base=$(basename "$entry")
+    skip=0
+
+    for excluded in "${package_excludes[@]}"; do
+      if [[ "$base" == "$excluded" ]]; then
+        skip=1
+        break
+      fi
+    done
+
+    if [[ "$skip" -eq 0 ]]; then
+      packages+=("$base")
+    fi
+  done < <(find "$repo_root" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+  if [[ ${#packages[@]} -eq 0 ]]; then
+    log_error "No package directories found in $repo_root"
+    exit 1
+  fi
+
+  printf '%s\n' "${packages[@]}"
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --manifest)
+        [[ $# -lt 2 ]] && { log_error "Missing value for --manifest"; exit 1; }
+        manifest_path=$2
+        shift 2
+        ;;
+      --format)
+        [[ $# -lt 2 ]] && { log_error "Missing value for --format"; exit 1; }
+        manifest_format=$2
+        shift 2
+        ;;
+      --dry-run)
+        mode="dry-run"
+        shift
+        ;;
+      --import)
+        mode="import"
+        shift
+        ;;
+      --package)
+        [[ $# -lt 2 ]] && { log_error "Missing value for --package"; exit 1; }
+        include_packages+=("$2")
+        shift 2
+        ;;
+      --exclude)
+        [[ $# -lt 2 ]] && { log_error "Missing value for --exclude"; exit 1; }
+        user_excludes+=("$2")
+        shift 2
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        log_error "Unknown argument: $1"
+        usage
+        exit 1
+        ;;
+    esac
+  done
+
+  if [[ -z "$manifest_path" ]]; then
+    log_error "--manifest is required"
+    usage
+    exit 1
+  fi
+
+  if [[ "$manifest_format" != "json" && "$manifest_format" != "csv" ]]; then
+    log_error "Invalid --format '$manifest_format'. Use json or csv."
+    exit 1
+  fi
+}
+
+main() {
+  parse_args "$@"
+  require_cmd find
+  require_cmd python3
+
+  if [[ "$mode" == "import" ]]; then
+    require_cmd chezmoi
+  fi
+
+  mapfile -t packages < <(
+    if [[ ${#include_packages[@]} -gt 0 ]]; then
+      printf '%s\n' "${include_packages[@]}"
+    else
+      discover_packages
+    fi
+  )
+
+  local package
+  for package in "${packages[@]}"; do
+    if [[ ! -d "$repo_root/$package" ]]; then
+      log_error "Package directory not found: $package"
+      exit 1
+    fi
+  done
+
+  local temp_entries
+  temp_entries=$(mktemp)
+
+  local package_root source rel target_home
+  for package in "${packages[@]}"; do
+    package_root="$repo_root/$package"
+    while IFS= read -r -d '' source; do
+      rel=${source#"$package_root/"}
+
+      if is_excluded_file "$rel"; then
+        continue
+      fi
+
+      target_home="$HOME/$rel"
+      printf '%s\t%s\t%s\n' "$package" "$package/$rel" "$target_home" >> "$temp_entries"
+    done < <(find "$package_root" \( -type f -o -type l \) -print0)
+  done
+
+  if [[ ! -s "$temp_entries" ]]; then
+    log_warn "No candidate files discovered."
+  fi
+
+  mkdir -p -- "$(dirname -- "$manifest_path")"
+
+  python3 - "$temp_entries" "$manifest_path" "$manifest_format" <<'PY'
+import csv
+import json
+import pathlib
+import sys
+
+src, manifest_path, fmt = sys.argv[1], sys.argv[2], sys.argv[3]
+rows = []
+with open(src, encoding="utf-8") as f:
+    for line in f:
+        line = line.rstrip("\n")
+        if not line:
+            continue
+        package, repo_source, target_home = line.split("\t")
+        rows.append(
+            {
+                "package": package,
+                "repo_source": repo_source,
+                "target_home": target_home,
+            }
+        )
+
+path = pathlib.Path(manifest_path)
+if fmt == "json":
+    path.write_text(json.dumps(rows, indent=2) + "\n", encoding="utf-8")
+else:
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=["package", "repo_source", "target_home"])
+        writer.writeheader()
+        writer.writerows(rows)
+PY
+
+  log_info "Manifest written: $manifest_path"
+
+  local total=0 success=0 failure=0
+  local line target repo_source package_name
+
+  while IFS=$'\t' read -r package_name repo_source target; do
+    [[ -z "$target" ]] && continue
+    total=$((total + 1))
+
+    if [[ ! -e "$target" ]]; then
+      log_error "Missing target: $target (from $repo_source)"
+      failure=$((failure + 1))
+      continue
+    fi
+
+    if [[ ! -r "$target" ]]; then
+      log_error "Unreadable target: $target (from $repo_source)"
+      failure=$((failure + 1))
+      continue
+    fi
+
+    if [[ "$mode" == "dry-run" ]]; then
+      printf 'DRY-RUN chezmoi add --follow -- %q\n' "$target"
+      success=$((success + 1))
+      continue
+    fi
+
+    if chezmoi add --follow -- "$target"; then
+      log_info "Imported: $target"
+      success=$((success + 1))
+    else
+      log_error "chezmoi add failed: $target"
+      failure=$((failure + 1))
+    fi
+  done < "$temp_entries"
+
+  rm -f -- "$temp_entries"
+
+  log_info "Done. total=$total success=$success failure=$failure mode=$mode"
+
+  if [[ "$failure" -gt 0 ]]; then
+    exit 1
+  fi
+}
+
+main "$@"
