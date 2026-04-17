@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="/home/pazthor/Code/dotfiles"
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
 
-git -C "$repo_root" status
+if ! git -C "$repo_root" status; then
+  echo "Unable to run git status in '$repo_root' (is this a git clone?)." >&2
+  exit 1
+fi
