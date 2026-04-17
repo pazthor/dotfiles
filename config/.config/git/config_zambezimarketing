@@ -1,0 +1,8 @@
+
+[user]
+	name = Julio C. Pastor
+	email = hi.pazthor@gmail.com
+[pull]
+	rebase = false
+[core]
+	excludesfile = ~/.config/git/ignore_zambezi

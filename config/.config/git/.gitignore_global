@@ -1,0 +1,15 @@
+# NodeJS
+node_modules
+
+# Env #
+#######
+.env
+*.secret.*
+*.secrets.*
+
+*.local
+# Claude Code #
+.claude/*.local.*
+
+specs.md
+*.specs.md

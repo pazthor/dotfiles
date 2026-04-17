@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+set -eu -o pipefail
+
+MONITOR="eDP-1"
+
+# hyprctl monitors -j lists only active (non-disabled) monitors
+if hyprctl monitors -j | grep -q '"name": "'"$MONITOR"'"'; then
+  hyprctl keyword monitor "$MONITOR,disable"
+else
+  # Restore full config — hyprdynamicmonitors already wrote the correct monitors.conf
+  hyprctl reload
+fi

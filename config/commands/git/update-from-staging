@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -eu -o pipefail
+
+usage() {
+  cat <<'HELP'
+Usage: update-from-staging [theirs|ours]
+
+Fetches origin/staging and merges it into the current branch.
+
+  (no arg)  — stops on conflicts so you can resolve manually
+  theirs    — auto-resolve conflicts keeping staging's version
+  ours      — auto-resolve conflicts keeping the current branch's version
+
+HELP
+}
+
+strategy="${1:-}"
+
+if [[ "$strategy" == "-h" || "$strategy" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ -n "$strategy" && "$strategy" != "theirs" && "$strategy" != "ours" ]]; then
+  echo "Error: unknown strategy '$strategy'. Use 'theirs', 'ours', or omit."
+  usage
+  exit 1
+fi
+
+branch=$(git branch --show-current)
+echo "Fetching origin/staging..."
+git fetch origin staging
+
+echo "Merging origin/staging into $branch..."
+if git merge origin/staging; then
+  echo "Merge completed cleanly."
+else
+  if [[ -z "$strategy" ]]; then
+    echo ""
+    echo "Conflicts detected. Resolve manually, or re-run with:"
+    echo "  update-from-staging theirs   (keep staging's version)"
+    echo "  update-from-staging ours     (keep your branch's version)"
+    exit 1
+  fi
+
+  echo "Resolving conflicts with --$strategy..."
+  git diff --name-only --diff-filter=U | xargs git checkout "--$strategy"
+  git add -A
+  git commit --no-edit
+  echo "Merge committed (conflicts resolved with $strategy)."
+fi

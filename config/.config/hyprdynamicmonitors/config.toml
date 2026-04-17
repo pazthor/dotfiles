@@ -1,0 +1,58 @@
+[general]
+destination = "$HOME/.config/hypr/monitors.conf"
+# Force Hyprland to reload after monitor config changes
+post_apply_exec = "hyprctl reload"
+
+[static_template_values]
+# Adjust these defaults to match your panel
+default_res = "1920x1080"
+ac_refresh = "60.00000"
+ac_scale = "1.5"
+vrr_on_ac = "0"
+battery_refresh = "60.00000"
+battery_scale = "1.5"
+vrr_on_battery = "0"
+
+[power_events]
+[power_events.dbus_query_object]
+path = "/org/freedesktop/UPower/devices/line_power_ACAD"
+
+[[power_events.dbus_signal_match_rules]]
+object_path = "/org/freedesktop/UPower/devices/line_power_ACAD"
+
+[profiles.laptop_ac]
+config_file = "hyprconfigs/laptop-ac.go.tmpl"
+config_file_type = "template"
+
+[profiles.laptop_ac.conditions]
+power_state = "AC"
+
+[[profiles.laptop_ac.conditions.required_monitors]]
+name = "eDP-1"
+monitor_tag = "laptop"
+
+[profiles.laptop_battery]
+config_file = "hyprconfigs/laptop-battery.go.tmpl"
+config_file_type = "template"
+
+[profiles.laptop_battery.conditions]
+power_state = "BAT"
+
+[[profiles.laptop_battery.conditions.required_monitors]]
+name = "eDP-1"
+monitor_tag = "laptop"
+
+[profiles.dual_external_top]
+config_file = "hyprconfigs/dual-external-top.go.tmpl"
+config_file_type = "template"
+
+[profiles.dual_external_top.conditions]
+power_state = "AC"
+
+[[profiles.dual_external_top.conditions.required_monitors]]
+name = "eDP-1"
+monitor_tag = "laptop"
+
+[[profiles.dual_external_top.conditions.required_monitors]]
+name = "HDMI-A-1"
+monitor_tag = "external"

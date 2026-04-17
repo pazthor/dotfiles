@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+whatsapp-video - Convert a video to a WhatsApp-friendly MP4.
+
+Usage:
+  whatsapp-video [--output PATH] [--max-size MB] INPUT
+
+Options:
+  --output PATH   Where to write the converted file. Defaults to INPUT-whatsapp.mp4
+  --max-size MB   Target size in megabytes (default: 16)
+USAGE
+}
+
+die() {
+  printf 'whatsapp-video: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    die "required command '$1' not found in PATH"
+  fi
+}
+
+calculate_bitrates() {
+  local duration size_mb audio_kbps
+  duration=$1
+  size_mb=$2
+  audio_kbps=$3
+
+  # Convert megabytes to kilobits (MB * 8,192)
+  local total_kbits target_kbps video_kbps
+  total_kbits=$(awk -v mb="${size_mb}" 'BEGIN { printf "%.0f", mb * 8192 }')
+  target_kbps=$(awk -v kbits="${total_kbits}" -v dur="${duration}" 'BEGIN { if (dur <= 0) { print 0 } else { printf "%.0f", kbits / dur } }')
+
+  if [[ "${target_kbps}" -le "${audio_kbps}" ]]; then
+    # leave at least 120 kbps for the video stream
+    video_kbps=120
+  else
+    video_kbps=$(( target_kbps - audio_kbps ))
+    if [[ "${video_kbps}" -lt 120 ]]; then
+      video_kbps=120
+    fi
+  fi
+
+  printf '%s\n' "${video_kbps}"
+}
+
+main() {
+  local input=""
+  local output=""
+  local max_size_mb=16
+  local audio_kbps=96
+
+  while (($#)); do
+    case "$1" in
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      --output)
+        shift || die "missing value for --output"
+        output=$1
+        ;;
+      --max-size)
+        shift || die "missing value for --max-size"
+        max_size_mb=$1
+        ;;
+      --*)
+        die "unknown option '$1'"
+        ;;
+      *)
+        if [[ -n "${input}" ]]; then
+          die "only one input file supported"
+        fi
+        input=$1
+        ;;
+    esac
+    shift
+  done
+
+  [[ -n "${input}" ]] || die "no input file provided"
+  [[ -f "${input}" ]] || die "input file not found: ${input}"
+
+  if [[ -z "${output}" ]]; then
+    output="${input%.*}-whatsapp.mp4"
+  fi
+
+  require_command ffmpeg
+  require_command ffprobe
+
+  local duration
+  duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -- "${input}" || true)
+
+  if [[ -z "${duration}" ]]; then
+    die "could not determine duration for ${input}"
+  fi
+
+  local video_kbps
+  video_kbps=$(calculate_bitrates "${duration}" "${max_size_mb}" "${audio_kbps}")
+
+  printf 'Converting %s -> %s (target size ≤ %s MB, video bitrate ≈ %s kbps)\n' \
+    "${input}" "${output}" "${max_size_mb}" "${video_kbps}"
+
+  ffmpeg -y -i "${input}" \
+    -vf "scale='min(1280,iw)':-2,fps=30" \
+    -c:v libx264 -preset slow -profile:v high -level 4.0 \
+    -b:v "${video_kbps}k" -maxrate "$(( video_kbps * 3 / 2 ))k" -bufsize "$(( video_kbps * 3 ))k" \
+    -pix_fmt yuv420p \
+    -c:a aac -b:a "${audio_kbps}k" -ac 2 \
+    -movflags +faststart \
+    -- "${output}"
+}
+
+main "$@"

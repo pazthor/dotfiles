@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+mount-flash - Mount or unmount a USB flash drive partition
+
+Usage:
+  mount-flash [--unmount] [<device>]
+
+Options:
+  --unmount   Unmount instead of mount
+  <device>    Partition path e.g. /dev/sdb1 (prompts via fzf if omitted)
+
+Examples:
+  mount-flash                   # interactive picker, mounts partition
+  mount-flash /dev/sdb1         # mount specific partition
+  mount-flash --unmount         # interactive picker, unmounts partition
+USAGE
+}
+
+die() { printf 'mount-flash: %s\n' "$1" >&2; exit "${2:-1}"; }
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command '$1' not found"
+}
+
+pick_partition() {
+  local entries
+  entries=$(lsblk -ln -o NAME,SIZE,RM,FSTYPE,MOUNTPOINT,TRAN,LABEL \
+    | awk '($6 == "usb" || $3 == "1") && $4 != "" { printf "/dev/%-10s size=%-8s fs=%-8s label=%-10s mount=%s\n", $1, $2, $4, ($7==""?"(none)":$7), ($5==""?"(not mounted)":$5) }')
+  [[ -n "$entries" ]] || die "no USB partitions found"
+  printf '%s\n' "$entries" | fzf --prompt="Select partition: " | awk '{print $1}'
+}
+
+pick_mounted() {
+  local entries
+  entries=$(lsblk -ln -o NAME,SIZE,RM,FSTYPE,MOUNTPOINT,TRAN,LABEL \
+    | awk '($6 == "usb" || $3 == "1") && $5 != "" { printf "/dev/%-10s size=%-8s mount=%s\n", $1, $2, $5 }')
+  [[ -n "$entries" ]] || die "no mounted USB partitions found"
+  printf '%s\n' "$entries" | fzf --prompt="Select partition to unmount: " | awk '{print $1}'
+}
+
+main() {
+  local unmount=0 device=""
+
+  while (($#)); do
+    case "$1" in
+      --help|-h)    usage; exit 0 ;;
+      --unmount|-u) unmount=1 ;;
+      --*)          die "unknown option '$1'" ;;
+      *)            device="$1" ;;
+    esac
+    shift
+  done
+
+  require_command lsblk
+  require_command fzf
+  require_command sudo
+
+  if ((unmount)); then
+    [[ -z "$device" ]] && device=$(pick_mounted)
+    [[ -b "$device" ]] || die "block device not found: $device"
+    local mp
+    mp=$(lsblk -ln -o MOUNTPOINT "$device" | awk 'NF' | head -1)
+    [[ -n "$mp" ]] || die "$device is not mounted"
+    printf 'Unmounting %s from %s\n' "$device" "$mp"
+    sudo umount "$device"
+    printf 'Done.\n'
+    return
+  fi
+
+  [[ -z "$device" ]] && device=$(pick_partition)
+  [[ -b "$device" ]] || die "block device not found: $device"
+
+  local already
+  already=$(lsblk -ln -o MOUNTPOINT "$device" | awk 'NF' | head -1)
+  [[ -z "$already" ]] || die "$device is already mounted at $already"
+
+  local label
+  label=$(lsblk -ln -o LABEL "$device" | awk 'NF' | head -1)
+  local mount_point="/run/media/$USER/${label:-flash}"
+
+  sudo mkdir -p "$mount_point"
+  sudo mount "$device" "$mount_point"
+  printf 'Mounted %s at %s\n' "$device" "$mount_point"
+}
+
+main "$@"

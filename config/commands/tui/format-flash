@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+format-flash - Format a USB flash drive
+
+Usage:
+  format-flash [--fs <filesystem>] [--label <label>] [<device>]
+
+Options:
+  --fs <filesystem>   Filesystem: exfat (default), ext4
+  --label <label>     Volume label (default: FLASH)
+  <device>            Device path e.g. /dev/sdb (prompts via fzf if omitted)
+
+Examples:
+  format-flash                          # interactive picker, formats as exFAT
+  format-flash /dev/sdb                 # format specific device as exFAT
+  format-flash --fs ext4 /dev/sdb       # format as ext4
+  format-flash --label BACKUP /dev/sdb  # custom label
+USAGE
+}
+
+die() { printf 'format-flash: %s\n' "$1" >&2; exit "${2:-1}"; }
+
+require_command() {
+  command -v "$1" >/dev/null 2>&1 || die "required command '$1' not found"
+}
+
+pick_device() {
+  local entries
+  entries=$(lsblk -d -o NAME,SIZE,RM,TRAN,VENDOR,MODEL --noheadings \
+    | awk '($4 == "usb" || $3 == "1") { printf "/dev/%-10s %s  %s %s\n", $1, $2, $5, $6 }')
+  [[ -n "$entries" ]] || die "no USB drives found"
+  printf '%s\n' "$entries" | fzf --prompt="Select USB drive: " | awk '{print $1}'
+}
+
+unmount_partitions() {
+  lsblk -ln -o MOUNTPOINT "$1" | awk 'NF' | while read -r mp; do
+    printf 'Unmounting %s\n' "$mp"
+    sudo umount "$mp"
+  done
+}
+
+main() {
+  local fs="exfat" label="FLASH" device=""
+
+  while (($#)); do
+    case "$1" in
+      --help|-h) usage; exit 0 ;;
+      --fs)    shift || die "missing value for --fs";    fs="$1"    ;;
+      --label) shift || die "missing value for --label"; label="$1" ;;
+      --*) die "unknown option '$1'" ;;
+      *)   device="$1" ;;
+    esac
+    shift
+  done
+
+  case "$fs" in
+    exfat|ext4) ;;
+    *) die "unsupported filesystem '$fs'. Use: exfat, ext4" ;;
+  esac
+
+  require_command lsblk
+  require_command fzf
+  require_command sudo
+  require_command parted
+  require_command partprobe
+
+  [[ -z "$device" ]] && device=$(pick_device)
+  [[ -b "$device" ]] || die "block device not found: $device"
+
+  # Warn if not USB
+  local tran
+  tran=$(lsblk -d -o TRAN --noheadings "$device" 2>/dev/null || true)
+  if [[ "$tran" != "usb" ]]; then
+    printf 'WARNING: %s is not a USB device (transport: %s)\n' "$device" "${tran:-unknown}" >&2
+  fi
+
+  printf '\nDevice info:\n'
+  lsblk "$device"
+  printf '\nFilesystem : %s\n' "$fs"
+  printf 'Label      : %s\n\n' "$label"
+  printf 'This will DESTROY all data on %s.\nType YES to confirm: ' "$device"
+  local confirm; read -r confirm
+  [[ "$confirm" == "YES" ]] || die "aborted"
+
+  unmount_partitions "$device"
+
+  local partition="${device}1"
+
+  printf 'Creating partition table on %s...\n' "$device"
+  sudo parted --script "$device" mklabel msdos mkpart primary 0% 100%
+  sudo partprobe "$device"
+  sleep 1
+  [[ -b "$partition" ]] || die "partition $partition not found after partprobe"
+
+  case "$fs" in
+    exfat)
+      require_command mkfs.exfat
+      sudo mkfs.exfat -n "$label" "$partition"
+      ;;
+    ext4)
+      require_command mkfs.ext4
+      sudo mkfs.ext4 -L "$label" "$partition"
+      ;;
+  esac
+
+  printf '\nDone. %s formatted as %s with label "%s".\n' "$partition" "$fs" "$label"
+}
+
+main "$@"
