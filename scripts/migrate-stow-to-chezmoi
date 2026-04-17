@@ -5,7 +5,7 @@ script_name=$(basename "$0")
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_root=$(cd -- "$script_dir/.." && pwd)
 
-manifest_path=""
+manifest_path="$HOME/.cache/dotfiles-migration-manifest.json"
 manifest_format="json"
 mode="dry-run"
 
@@ -44,7 +44,7 @@ Modes:
   --import            Discover files, write manifest, and run chezmoi add --follow
 
 Options:
-  --manifest PATH     Required. Manifest output path.
+  --manifest PATH     Manifest output path (default: ~/.cache/dotfiles-migration-manifest.json)
   --format FORMAT     Manifest format: json or csv (default: json)
   --package DIR       Include only this package dir (repeatable)
   --exclude GLOB      Exclude files by glob relative to package root (repeatable)
@@ -167,11 +167,6 @@ parse_args() {
     esac
   done
 
-  if [[ -z "$manifest_path" ]]; then
-    log_error "--manifest is required"
-    usage
-    exit 1
-  fi
 
   if [[ "$manifest_format" != "json" && "$manifest_format" != "csv" ]]; then
     log_error "Invalid --format '$manifest_format'. Use json or csv."
