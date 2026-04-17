@@ -16,17 +16,36 @@ The script will:
 - Replace the original with a symlink
 - Stage the file with git
 
+Before importing, you can preview canonical mappings:
+
+```bash
+~/Code/dotfiles/scripts/adopt-verify
+~/Code/dotfiles/scripts/adopt-verify ~/.config/hypr/bindings.conf
+```
+
 ## Layout
 
-The repo mirrors your home directory structure so symlinks remain simple.
+The repo uses a canonical package root model:
+
+- `config/` maps to `$HOME`
+- `scripts/` is **repo tooling**, not a package to install into `$HOME`
 
 ```
 ~/Code/dotfiles/
-├── .config/
-│   └── ...
+├── config/
+│   ├── .config/
+│   │   └── ...
+│   └── bin/
+│       └── ...
 └── scripts/
-    └── adopt-config
+    ├── adopt-config
+    └── adopt-verify
 ```
+
+Examples:
+
+- `config/.config/hypr/hyprland.conf` → `~/.config/hypr/hyprland.conf`
+- `config/bin/my-script` → `~/bin/my-script`
 
 ## Tutorial
 
@@ -45,7 +64,7 @@ $EDITOR ~/.config/hypr/bindings.conf
 ```
 
 This will:
-- Copy the file into the repo
+- Copy the file into `config/...` in the repo
 - Replace the original with a symlink
 - Stage it with git
 - Keep a timestamped backup next to the original
@@ -81,6 +100,13 @@ Print the quick summary plus full tutorial:
 
 ```bash
 ~/Code/dotfiles/scripts/help
+```
+
+Print canonical mapping samples and preview a specific path:
+
+```bash
+~/Code/dotfiles/scripts/adopt-verify
+~/Code/dotfiles/scripts/adopt-verify ~/bin/my-helper
 ```
 
 Adopt a file with a shorter command:
@@ -143,7 +169,7 @@ Example for `~/.config/hypr/hyprsunset.conf`:
 
 # 2) Move adopted file into a Stow package
 mkdir -p ~/Code/dotfiles/hypr/.config/hypr
-mv ~/Code/dotfiles/.config/hypr/hyprsunset.conf \
+mv ~/Code/dotfiles/config/.config/hypr/hyprsunset.conf \
   ~/Code/dotfiles/hypr/.config/hypr/hyprsunset.conf
 
 # 3) Replace old direct symlink with a Stow-managed symlink
