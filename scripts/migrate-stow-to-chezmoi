@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: migrate-stow-to-chezmoi [options] [package-root ...]
+
+Import existing files from your $HOME into chezmoi using paths implied by
+Stow package layout under this repository.
+
+Options:
+  --dry-run                 Print planned chezmoi commands without running them.
+  --packages <list>         Comma-separated package directory names to include.
+                            May be specified multiple times.
+  -h, --help                Show this help text.
+
+Arguments:
+  package-root              Stow package root directories in the repo.
+                            Default: config
+
+Examples:
+  migrate-stow-to-chezmoi
+  migrate-stow-to-chezmoi --dry-run
+  migrate-stow-to-chezmoi --packages hypr,waybar
+  migrate-stow-to-chezmoi --packages hypr --packages waybar
+  migrate-stow-to-chezmoi config
+USAGE
+}
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+# Defaults
+
+dry_run=0
+declare -a package_roots
+package_roots=("config")
+declare -A requested_packages=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --packages)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --packages requires a value" >&2
+        usage >&2
+        exit 1
+      fi
+      IFS=',' read -r -a package_names <<<"$2"
+      for name in "${package_names[@]}"; do
+        if [[ -n "$name" ]]; then
+          requested_packages["$name"]=1
+        fi
+      done
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      if [[ $# -gt 0 ]]; then
+        package_roots=("$@")
+      fi
+      break
+      ;;
+    -*)
+      echo "Error: unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      package_roots=("$@")
+      break
+      ;;
+  esac
+done
+
+if [[ $dry_run -ne 1 ]] && ! command -v chezmoi >/dev/null 2>&1; then
+  echo "Error: chezmoi is not installed" >&2
+  exit 1
+fi
+
+imported_count=0
+skipped_count=0
+missing_count=0
+
+# Keep warning detail for a final section.
+declare -a missing_targets=()
+
+for root in "${package_roots[@]}"; do
+  root_path="$repo_root/$root"
+
+  if [[ ! -d "$root_path" ]]; then
+    echo "Warning: package root not found, skipping: $root" >&2
+    skipped_count=$((skipped_count + 1))
+    continue
+  fi
+
+  while IFS= read -r -d '' package_dir; do
+    package_name=$(basename "$package_dir")
+
+    if [[ ${#requested_packages[@]} -gt 0 && -z ${requested_packages[$package_name]+x} ]]; then
+      continue
+    fi
+
+    while IFS= read -r -d '' source_file; do
+      rel_path=${source_file#"$package_dir/"}
+      target="$HOME/$rel_path"
+
+      if [[ ! -e "$target" ]]; then
+        missing_targets+=("$target (from $source_file)")
+        missing_count=$((missing_count + 1))
+        continue
+      fi
+
+      if [[ $dry_run -eq 1 ]]; then
+        printf 'chezmoi add --follow %q\n' "$target"
+      else
+        if ! chezmoi add --follow "$target"; then
+          echo "Error: chezmoi add failed for target: $target" >&2
+          exit 2
+        fi
+      fi
+
+      imported_count=$((imported_count + 1))
+    done < <(find "$package_dir" -type f -print0)
+  done < <(find "$root_path" -mindepth 1 -maxdepth 1 -type d -print0)
+done
+
+if [[ ${#requested_packages[@]} -gt 0 ]]; then
+  for requested in "${!requested_packages[@]}"; do
+    found=0
+    for root in "${package_roots[@]}"; do
+      if [[ -d "$repo_root/$root/$requested" ]]; then
+        found=1
+        break
+      fi
+    done
+
+    if [[ $found -eq 0 ]]; then
+      echo "Warning: requested package not found in selected roots: $requested" >&2
+      skipped_count=$((skipped_count + 1))
+    fi
+  done
+fi
+
+echo
+echo "Summary"
+echo "-------"
+echo "Imported: $imported_count"
+echo "Skipped:  $skipped_count"
+echo "Missing:  $missing_count"
+
+if [[ ${#missing_targets[@]} -gt 0 ]]; then
+  echo
+  echo "Warnings (missing targets)"
+  echo "--------------------------"
+  for missing in "${missing_targets[@]}"; do
+    echo "$missing"
+  done
+fi
