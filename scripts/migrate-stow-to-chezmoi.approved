@@ -1,0 +1,6 @@
+# Target paths (relative to $HOME) approved for chezmoi import.
+# Keep this list explicit and conservative.
+
+.config/**
+.local/bin/**
+.bin/**

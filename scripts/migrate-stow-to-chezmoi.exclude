@@ -1,0 +1,17 @@
+# Target paths (relative to $HOME) that should never be imported.
+# Generated monitor layouts, caches, and runtime state belong here.
+
+.cache/**
+.local/state/**
+.local/share/Trash/**
+.local/share/recently-used.xbel
+
+# Generated or transient monitor/runtime artifacts.
+.config/hypr/monitors-generated*.conf
+.config/hypr/monitor-layout*.json
+.config/hyprdynamicmonitors/**
+
+# Generic runtime/cache patterns under config trees.
+.config/**/cache/**
+.config/**/Cache/**
+.config/**/tmp/**

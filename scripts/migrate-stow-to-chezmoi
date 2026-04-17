@@ -1,0 +1,214 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  migrate-stow-to-chezmoi [--dry-run] [--allow-file PATH] [--exclude-file PATH] [--log-dir PATH] <stow-module> [stow-module...]
+
+Description:
+  Enumerate git-tracked files from Stow modules, map each source file to its
+  intended $HOME target, and run `chezmoi add --follow` for approved paths.
+
+Options:
+  --dry-run            Print planned imports without writing to chezmoi source state.
+  --allow-file PATH    Glob policy for approved target paths.
+                       Default: scripts/migrate-stow-to-chezmoi.approved
+  --exclude-file PATH  Glob policy for target paths to skip.
+                       Default: scripts/migrate-stow-to-chezmoi.exclude
+  --log-dir PATH       Directory where audit logs/summaries are written.
+                       Default: logs/chezmoi-migration
+  -h, --help           Show this help message.
+
+Policy format:
+  - One shell-glob pattern per line, matched against the computed target path
+    relative to $HOME (for example: .config/hypr/*.conf).
+  - Blank lines and lines starting with # are ignored.
+USAGE
+}
+
+matches_policy() {
+  local target_path=$1
+  local policy_file=$2
+
+  [[ -f "$policy_file" ]] || return 1
+
+  while IFS= read -r pattern || [[ -n "$pattern" ]]; do
+    pattern=${pattern%%$'\r'}
+    [[ -z "$pattern" || "${pattern:0:1}" == "#" ]] && continue
+    if [[ "$target_path" == $pattern ]]; then
+      return 0
+    fi
+  done <"$policy_file"
+
+  return 1
+}
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+allow_file="$script_dir/migrate-stow-to-chezmoi.approved"
+exclude_file="$script_dir/migrate-stow-to-chezmoi.exclude"
+log_dir="$repo_root/logs/chezmoi-migration"
+dry_run=0
+
+modules=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      dry_run=1
+      shift
+      ;;
+    --allow-file)
+      allow_file=$2
+      shift 2
+      ;;
+    --exclude-file)
+      exclude_file=$2
+      shift 2
+      ;;
+    --log-dir)
+      log_dir=$2
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      modules+=("$@")
+      break
+      ;;
+    -*)
+      echo "Error: unknown option '$1'" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      modules+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ${#modules[@]} -eq 0 ]]; then
+  echo "Error: provide at least one Stow module" >&2
+  usage >&2
+  exit 1
+fi
+
+if [[ $dry_run -eq 0 ]] && ! command -v chezmoi >/dev/null 2>&1; then
+  echo "Error: chezmoi is required (or pass --dry-run)" >&2
+  exit 1
+fi
+
+cd "$repo_root"
+mkdir -p "$log_dir"
+
+timestamp=$(date -u +"%Y%m%dT%H%M%SZ")
+run_log="$log_dir/${timestamp}.log"
+summary_tsv="$log_dir/${timestamp}-summary.tsv"
+latest_summary="$log_dir/latest-summary.tsv"
+latest_log="$log_dir/latest.log"
+
+{
+  printf 'timestamp_utc\t%s\n' "$timestamp"
+  printf 'mode\t%s\n' "$([[ $dry_run -eq 1 ]] && echo dry-run || echo apply)"
+  printf 'repo_root\t%s\n' "$repo_root"
+  printf 'allow_file\t%s\n' "$allow_file"
+  printf 'exclude_file\t%s\n' "$exclude_file"
+  printf 'modules\t%s\n' "${modules[*]}"
+  printf '%s\n' '---'
+} >"$run_log"
+
+printf 'status\tmodule\tsource\ttarget\treason\n' >"$summary_tsv"
+
+declare -a tracked_files
+for module in "${modules[@]}"; do
+  if [[ ! -d "$module" ]]; then
+    printf 'warn\t%s\t-\t-\tmodule directory does not exist\n' "$module" | tee -a "$summary_tsv" >>"$run_log"
+    continue
+  fi
+
+  while IFS= read -r -d '' file; do
+    tracked_files+=("$file")
+  done < <(git ls-files -z -- "$module/")
+done
+
+if [[ ${#tracked_files[@]} -eq 0 ]]; then
+  printf 'info\t-\t-\t-\tno tracked files found for requested modules\n' | tee -a "$summary_tsv" >>"$run_log"
+  cp "$run_log" "$latest_log"
+  cp "$summary_tsv" "$latest_summary"
+  echo "No tracked files found. Audit files:"
+  echo "  $run_log"
+  echo "  $summary_tsv"
+  exit 0
+fi
+
+processed=0
+added=0
+skipped_excluded=0
+skipped_unapproved=0
+missing_targets=0
+failed_adds=0
+
+for source_path in "${tracked_files[@]}"; do
+  module=${source_path%%/*}
+  target_path=${source_path#*/}
+  target_abs="$HOME/$target_path"
+
+  ((processed+=1))
+
+  if matches_policy "$target_path" "$exclude_file"; then
+    ((skipped_excluded+=1))
+    printf 'skipped-excluded\t%s\t%s\t%s\tmatched exclude policy\n' "$module" "$source_path" "$target_path" | tee -a "$summary_tsv" >>"$run_log"
+    continue
+  fi
+
+  if [[ -f "$allow_file" ]] && ! matches_policy "$target_path" "$allow_file"; then
+    ((skipped_unapproved+=1))
+    printf 'skipped-unapproved\t%s\t%s\t%s\tnot present in approval policy\n' "$module" "$source_path" "$target_path" | tee -a "$summary_tsv" >>"$run_log"
+    continue
+  fi
+
+  if [[ ! -e "$target_abs" && ! -L "$target_abs" ]]; then
+    ((missing_targets+=1))
+    printf 'missing-target\t%s\t%s\t%s\tcomputed $HOME target not found\n' "$module" "$source_path" "$target_path" | tee -a "$summary_tsv" >>"$run_log"
+    continue
+  fi
+
+  if [[ $dry_run -eq 1 ]]; then
+    ((added+=1))
+    printf 'planned\t%s\t%s\t%s\tchezmoi add --follow %q\n' "$module" "$source_path" "$target_path" "$target_abs" | tee -a "$summary_tsv" >>"$run_log"
+    continue
+  fi
+
+  if chezmoi add --follow "$target_abs" >>"$run_log" 2>&1; then
+    ((added+=1))
+    printf 'added\t%s\t%s\t%s\timported via chezmoi add --follow\n' "$module" "$source_path" "$target_path" | tee -a "$summary_tsv" >>"$run_log"
+  else
+    ((failed_adds+=1))
+    printf 'failed\t%s\t%s\t%s\tchezmoi add failed\n' "$module" "$source_path" "$target_path" | tee -a "$summary_tsv" >>"$run_log"
+  fi
+
+done
+
+{
+  printf '%s\n' '---'
+  printf 'processed\t%d\n' "$processed"
+  printf 'added_or_planned\t%d\n' "$added"
+  printf 'skipped_excluded\t%d\n' "$skipped_excluded"
+  printf 'skipped_unapproved\t%d\n' "$skipped_unapproved"
+  printf 'missing_targets\t%d\n' "$missing_targets"
+  printf 'failed_adds\t%d\n' "$failed_adds"
+} | tee -a "$run_log" >/dev/null
+
+cp "$run_log" "$latest_log"
+cp "$summary_tsv" "$latest_summary"
+
+echo "Migration audit files:"
+echo "  $run_log"
+echo "  $summary_tsv"
+echo "  $latest_log"
+echo "  $latest_summary"
