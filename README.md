@@ -23,6 +23,20 @@ Before importing, you can preview canonical mappings:
 ~/Code/dotfiles/scripts/adopt-verify ~/.config/hypr/bindings.conf
 ```
 
+## Quick commands (just)
+
+If you have [just](https://github.com/casey/just) installed, these recipes wrap the common workflows:
+
+```bash
+just migrate-inventory   # discover files not yet in chezmoi
+just import              # import all files into chezmoi
+just review              # preview pending changes
+just apply               # apply changes
+just adopt ~/.config/hypr/bindings.conf  # adopt a single file
+```
+
+Run `just` with no arguments to see all available recipes.
+
 ## Layout
 
 The repo uses a canonical package root model:
