@@ -1,6 +1,6 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
-dotfiles := env_var_or_default("DOTFILES", "/home/pazthor/Code/dotfiles")
+dotfiles := env_var_or_default("DOTFILES", justfile_directory())
 
 # Show available recipes
 default:
