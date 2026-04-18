@@ -265,14 +265,12 @@ PY
     total=$((total + 1))
 
     if [[ ! -e "$target" ]]; then
-      log_error "Missing target: $target (from $repo_source)"
-      failure=$((failure + 1))
+      log_warn "Skipping missing target: $target (not linked on this machine)"
       continue
     fi
 
     if [[ ! -r "$target" ]]; then
-      log_error "Unreadable target: $target (from $repo_source)"
-      failure=$((failure + 1))
+      log_warn "Skipping unreadable target: $target"
       continue
     fi
 
@@ -282,11 +280,11 @@ PY
       continue
     fi
 
-    if chezmoi add --follow -- "$target"; then
+    if chezmoi add -- "$target"; then
       log_info "Imported: $target"
       success=$((success + 1))
     else
-      log_error "chezmoi add failed: $target"
+      log_warn "chezmoi add failed (skipping): $target"
       failure=$((failure + 1))
     fi
   done < "$temp_entries"
