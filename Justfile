@@ -49,3 +49,7 @@ migrate:
 # Run full import
 import:
     {{dotfiles}}/scripts/migrate-stow-to-chezmoi --import
+
+# download a video from copy url 
+ydv:
+    {{dotfiles}}/scripts/yt-dlp
