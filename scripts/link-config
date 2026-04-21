@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+readonly PACKAGE_ROOTS=(
+  "config:$HOME"
+)
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME /path/to/home/file
+  $SCRIPT_NAME --force /path/to/home/file
+
+Link a repo-tracked file back to its home location as a symlink.
+The repo file must already exist under a tracked package root.
+
+Options:
+  --force   Skip confirmation when home file differs from repo file.
+
+Examples:
+  $SCRIPT_NAME ~/.config/hypr/input.conf
+  $SCRIPT_NAME --force ~/.config/hypr/input.conf
+USAGE
+}
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+normalize_path() {
+  local raw=$1
+  raw=${raw/#\~/$HOME}
+  readlink -f -- "$raw"
+}
+
+resolve_repo_path() {
+  local source_path=$1
+  local -a candidates=()
+  local entry pkg_root fs_root rel
+
+  for entry in "${PACKAGE_ROOTS[@]}"; do
+    pkg_root=${entry%%:*}
+    fs_root=${entry#*:}
+    if [[ "$source_path" == "$fs_root"/* ]]; then
+      rel=${source_path#"$fs_root/"}
+      candidates+=("$pkg_root/$rel")
+    fi
+  done
+
+  if (( ${#candidates[@]} == 0 )); then
+    echo "Error: unsupported path: $source_path" >&2
+    echo "Action: only files under declared package roots are supported:" >&2
+    printf '  - %s\n' "${PACKAGE_ROOTS[@]}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${candidates[0]}"
+}
+
+force=0
+input_arg=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --force) force=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+    *) input_arg=$1; shift ;;
+  esac
+done
+
+if [[ -z "$input_arg" ]]; then
+  usage
+  exit 1
+fi
+
+home_path=$(normalize_path "$input_arg")
+repo_relative=$(resolve_repo_path "$home_path")
+repo_path="$repo_root/$repo_relative"
+
+if [[ ! -f "$repo_path" ]]; then
+  echo "Error: file not tracked in repo: $repo_path" >&2
+  echo "Action: use adopt-config first to import it." >&2
+  exit 1
+fi
+
+if [[ -L "$home_path" ]]; then
+  current_target=$(readlink -f -- "$home_path")
+  if [[ "$current_target" == "$repo_path" ]]; then
+    echo "Already linked: $home_path -> $repo_path"
+    exit 0
+  fi
+  echo "Error: $home_path is already a symlink pointing elsewhere: $current_target" >&2
+  exit 1
+fi
+
+if [[ -f "$home_path" ]]; then
+  if ! diff -q -- "$repo_path" "$home_path" > /dev/null 2>&1; then
+    echo "Files differ:"
+    diff --color=auto -u "$repo_path" "$home_path" || true
+    echo
+    if (( force == 0 )); then
+      read -r -p "Replace home file with symlink to repo? Repo version wins. [y/N] " confirm
+      [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+    fi
+  fi
+  timestamp=$(date +%Y%m%d%H%M%S)
+  backup_path="$home_path.bak.$timestamp"
+  mv -- "$home_path" "$backup_path"
+  echo "Backup: $backup_path"
+fi
+
+ln -s -- "$repo_path" "$home_path"
+echo "Linked: $home_path -> $repo_path"

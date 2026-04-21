@@ -6,6 +6,10 @@ dotfiles := env_var_or_default("DOTFILES", justfile_directory())
 default:
     @just --list
 
+# Bootstrap a new machine: link all tracked config files to home
+bootstrap *args:
+    {{dotfiles}}/scripts/bootstrap {{args}}
+
 # Discover files not yet managed by chezmoi
 migrate-inventory:
     cd {{dotfiles}} && make migrate-inventory

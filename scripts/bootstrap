@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME [--dry-run] [--force]
+
+Link all repo-tracked config files to their home locations.
+Iterates over every file under config/ and runs link-config for each.
+
+Options:
+  --dry-run   Print what would be linked without making changes.
+  --force     Skip confirmation prompts when files differ.
+USAGE
+}
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+dry_run=0
+force=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=1; shift ;;
+    --force)   force=1;   shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+linked=0
+skipped=0
+failed=0
+
+while IFS= read -r repo_rel; do
+  home_path="$HOME/${repo_rel#config/}"
+
+  if (( dry_run )); then
+    echo "would link: $home_path -> $repo_root/$repo_rel"
+    continue
+  fi
+
+  if "$script_dir/link-config" ${force:+--force} "$home_path"; then
+    linked=$((linked + 1))
+  else
+    failed=$((failed + 1))
+  fi
+done < <(git -C "$repo_root" ls-files -- 'config/' | grep -v '__pycache__')
+
+if (( dry_run )); then
+  exit 0
+fi
+
+echo
+echo "Bootstrap complete: linked=$linked skipped=$skipped failed=$failed"
+(( failed == 0 ))
