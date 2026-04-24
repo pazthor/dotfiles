@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+yt-dlp-whatsapp - Download a YouTube video and convert it for WhatsApp.
+
+Usage:
+  yt-dlp-whatsapp [--output PATH] [--max-size MB] URL
+
+Options:
+  --output PATH   Where to write the final converted file.
+                  Defaults to <video-title>-whatsapp.mp4 in the current directory.
+  --max-size MB   Target size in megabytes (default: 16).
+USAGE
+}
+
+die() {
+  printf 'yt-dlp-whatsapp: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    die "required command '$1' not found in PATH"
+  fi
+}
+
+main() {
+  local url="" output="" max_size_mb=""
+
+  while (($#)); do
+    case "$1" in
+      --help|-h) usage; exit 0 ;;
+      --output)  shift || die "missing value for --output"; output=$1 ;;
+      --max-size) shift || die "missing value for --max-size"; max_size_mb=$1 ;;
+      --*) die "unknown option '$1'" ;;
+      *)
+        [[ -z "${url}" ]] || die "only one URL supported"
+        url=$1 ;;
+    esac
+    shift
+  done
+
+  [[ -n "${url}" ]] || die "no URL provided"
+  require_command yt-dlp
+  require_command whatsapp-video
+
+  local tmpdir
+  tmpdir=$(mktemp -d)
+  trap 'rm -rf -- "${tmpdir}"' EXIT
+
+  printf 'yt-dlp-whatsapp: downloading %s\n' "${url}"
+
+  local downloaded
+  downloaded=$(
+    yt-dlp \
+      --cookies-from-browser chromium \
+      -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b" \
+      --merge-output-format mp4 \
+      --output "${tmpdir}/%(title)s.%(ext)s" \
+      --print "after_move:filepath" \
+      -- "${url}"
+  )
+
+  [[ -f "${downloaded}" ]] || die "yt-dlp did not produce a file at: ${downloaded}"
+
+  if [[ -z "${output}" ]]; then
+    local title
+    title=$(basename "${downloaded}" .mp4)
+    output="${title}-whatsapp.mp4"
+  fi
+
+  local wa_args=(--output "${output}")
+  [[ -n "${max_size_mb}" ]] && wa_args+=(--max-size "${max_size_mb}")
+
+  whatsapp-video "${wa_args[@]}" -- "${downloaded}"
+}
+
+main "$@"

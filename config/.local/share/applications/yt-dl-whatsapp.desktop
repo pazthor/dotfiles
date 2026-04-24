@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=yt-dl-whatsapp
+Comment=Download video and convert for WhatsApp
+Exec=xdg-terminal-exec --app-id=TUI.float -e bash -c '/home/pazthor/Code/dotfiles-omarchy/commands/tui/ydp --whatsapp'
+Terminal=false
+Type=Application
+Icon=/home/pazthor/.local/share/applications/icons/yt-dl.png
+StartupNotify=true

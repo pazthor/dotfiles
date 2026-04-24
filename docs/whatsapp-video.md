@@ -37,3 +37,43 @@ The command prints the target bitrate budget and writes `~/Videos/presentation-w
 - You can run `whatsapp-video` on already small clips to normalize them for WhatsApp without size reduction.
 - For ultra-short clips (≤ 10 seconds) increase `--max-size` to bump quality if the default looks soft.
 - If you need audio-only, use `ydp --audio` from `config/.local/bin/ydp` instead of this helper.
+
+## Download and convert in one step
+
+`yt-dlp-whatsapp` downloads a video from any URL supported by `yt-dlp`
+(YouTube, Instagram, etc.) and converts it for WhatsApp in one command.
+It downloads to a temp directory, then hands the file to `whatsapp-video`.
+
+**Prerequisites**: `yt-dlp`, `whatsapp-video`, and `chromium` in `$PATH`.
+
+```bash
+yt-dlp-whatsapp [--output PATH] [--max-size MB] URL
+```
+
+- `URL` (required) – any URL supported by `yt-dlp`.
+- `--output PATH` – destination file. Defaults to `<title>-whatsapp.mp4` in the current directory.
+- `--max-size MB` – passed through to `whatsapp-video` (default `16`).
+
+```bash
+yt-dlp-whatsapp https://www.instagram.com/reel/DXVkc8MiT49/
+yt-dlp-whatsapp --max-size 12 https://youtu.be/VIDEO_ID
+```
+
+Uses `--cookies-from-browser chromium` so Instagram reels and age-restricted
+YouTube videos work without manual cookie setup.
+
+## Desktop launchers (TUI workflow)
+
+Two `.desktop` entries in `config/.local/share/applications/` drive a
+clipboard-based workflow:
+
+| Launcher | What it does |
+|---|---|
+| `yt-dl` | Download best quality → `~/Downloads/videos/` |
+| `yt-dl-whatsapp` | Download + convert for WhatsApp → `~/Downloads/videos/<title>-whatsapp.mp4` |
+
+**Workflow**: copy a URL → open the launcher from the app menu → a floating
+terminal downloads, converts, and closes automatically.
+
+Both launchers call `ydp` (lives in `dotfiles-omarchy/commands/tui/`), which
+reads the URL from the Wayland clipboard with `wl-paste`.
