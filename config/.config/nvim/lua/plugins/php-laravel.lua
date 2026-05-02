@@ -135,7 +135,7 @@ return {
         noremap = true,
       },
     },
-    event = { "VeryLazy" },
+    event = {},
     opts = {
       features = {
         pickers = {
