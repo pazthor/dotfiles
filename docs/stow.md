@@ -44,6 +44,9 @@ make migrate-verify     # check for missing paths / non-symlink targets
 
 ## Notes
 
+- `config/` paths map to `$HOME/<relative-path>` (for example, `config/.local/bin/yda` -> `~/.local/bin/yda`).
+- Legacy `.config/` paths, if any remain, map to `$HOME/.config/<relative-path>`.
 - `migrate-import` depends on `migrate-inventory`, so the manifest always refreshes first.
 - `migrate-verify` fails if inventory paths are missing or no longer symlinks.
+- After `git pull`, use `just sync` (or `scripts/bootstrap`) to create any newly added symlinks in `$HOME`.
 - The historical typo target `adot-config` is still available as a deprecated alias for `adopt-config`.

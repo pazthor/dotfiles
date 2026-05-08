@@ -76,9 +76,18 @@ just review   # chezmoi diff — shows what would change
 just apply    # apply changes (prompts for confirmation)
 ```
 
-### Re-import after pulling changes
+### Refresh after pulling changes
 
-After `git pull`, re-apply to sync new files to your home directory:
+If your home directory uses repo-backed symlinks, refresh links after `git pull`:
+
+```bash
+git pull
+just sync
+```
+
+Existing symlinks pick up repo edits immediately; `just sync` mainly links newly added files and repairs missing links.
+
+If you manage materialized files with chezmoi instead of symlinks, run `just apply` after pulling:
 
 ```bash
 git pull
@@ -89,6 +98,8 @@ just apply
 
 | Recipe | What it does |
 |---|---|
+| `just bootstrap [--force]` | Link or refresh repo-backed symlinks in `$HOME` |
+| `just sync [--force]` | Alias for `just bootstrap`; useful after `git pull` |
 | `just import` | Import all repo files into chezmoi |
 | `just review` | Preview pending chezmoi changes |
 | `just apply` | Apply chezmoi changes interactively |
@@ -151,7 +162,7 @@ scripts/help     # print the full tutorial
 ## Troubleshooting
 
 **`just import` shows warnings about missing targets**
-Files in the repo that aren't symlinked on this machine are skipped. This is expected — run `stow-pack config` to create the missing symlinks first, then re-run `just import`.
+Files in the repo that aren't linked on this machine are skipped. This is expected — run `just sync` to create the missing symlinks first, then re-run `just import`.
 
 **`chezmoi apply` overwrites a file I didn't expect**
 Run `just review` before applying to see exactly what will change. If a file is managed by chezmoi but shouldn't be, remove it with `chezmoi forget <path>`.

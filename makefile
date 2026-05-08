@@ -3,12 +3,12 @@ SHELL := /usr/bin/env bash
 CHEZMOI ?= chezmoi
 MIGRATION_MANIFEST ?= .cache/chezmoi-migration-manifest.txt
 
-.PHONY: migrate-inventory migrate-import migrate-diff migrate-apply migrate-verify adopt-config adot-config
+.PHONY: migrate-inventory migrate-import migrate-diff migrate-apply migrate-verify adopt-config adopt-verify adot-config
 
 migrate-inventory:
 	@mkdir -p "$(dir $(MIGRATION_MANIFEST))"
 	@{ \
-		git ls-files 'config/**' | sed "s#^config/#$$HOME/.config/#"; \
+		git ls-files 'config/**' | sed "s#^config/#$$HOME/#"; \
 		git ls-files '.config/**' | sed "s#^.config/#$$HOME/.config/#"; \
 	} | sort -u > "$(MIGRATION_MANIFEST)"
 	@echo "Wrote migration manifest: $(MIGRATION_MANIFEST)"

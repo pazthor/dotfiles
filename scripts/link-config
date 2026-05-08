@@ -31,7 +31,7 @@ repo_root=$(cd -- "$script_dir/.." && pwd)
 normalize_path() {
   local raw=$1
   raw=${raw/#\~/$HOME}
-  readlink -f -- "$raw"
+  python -c 'import os, sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$raw"
 }
 
 resolve_repo_path() {
@@ -111,5 +111,6 @@ if [[ -f "$home_path" ]]; then
   echo "Backup: $backup_path"
 fi
 
+mkdir -p -- "$(dirname -- "$home_path")"
 ln -s -- "$repo_path" "$home_path"
 echo "Linked: $home_path -> $repo_path"

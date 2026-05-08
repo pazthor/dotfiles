@@ -6,8 +6,12 @@ dotfiles := env_var_or_default("DOTFILES", justfile_directory())
 default:
     @just --list
 
-# Bootstrap a new machine: link all tracked config files to home
+# Bootstrap or refresh repo-backed symlinks in $HOME
 bootstrap *args:
+    {{dotfiles}}/scripts/bootstrap {{args}}
+
+# Sync symlink-managed files after pulling changes from git
+sync *args:
     {{dotfiles}}/scripts/bootstrap {{args}}
 
 # Discover files not yet managed by chezmoi
