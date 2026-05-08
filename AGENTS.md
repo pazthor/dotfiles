@@ -1,29 +1,15 @@
 # Project Instructions for AI Agents
 
-This file provides instructions and context for AI coding agents working on this project.
+This is a personal dotfiles repository. Keep workflows simple and practical.
 
-<!-- BEGIN BEADS INTEGRATION v:1 profile:full hash:f65d5d33 -->
 ## Task Tracking
 
-This is a **personal dotfiles repository**, so keep task tracking lightweight.
+- Formal issue tracking is optional.
+- Small config tweaks, docs edits, and one-off script fixes do not need `bd`.
+- Use `bd` only for larger multi-step work, blocked work, or backlog items worth revisiting.
+- If `bd` is unavailable, continue without it.
 
-### Default approach
-
-- Small tweaks, config edits, and one-off fixes do **not** need a formal issue.
-- Track follow-up work in the final handoff message, or in project docs only when that documentation is genuinely useful.
-- Avoid creating duplicate tracking systems for trivial work.
-
-### Optional: bd (beads)
-
-`bd` is **optional**, not required.
-Use it only when the work is large enough to benefit from structured tracking, for example:
-
-- multi-step migrations
-- refactors spanning several files or tools
-- blocked work with dependencies
-- backlog items you want to revisit later
-
-If `bd` is available and you choose to use it, prefer JSON output:
+Optional `bd` examples:
 
 ```bash
 bd ready --json
@@ -32,64 +18,57 @@ bd update <id> --claim --json
 bd close <id> --reason "Completed" --json
 ```
 
-If `bd`/`dolt` is not installed or configured, continue without it.
+## Build & Test
 
-### Important rules
+Use lightweight validation appropriate to the change.
 
-- ✅ Prefer simple workflows for simple changes
-- ✅ Use `bd` only when it adds real value
-- ✅ Keep handoff notes clear when follow-up work remains
-- ❌ Do NOT make `bd` a blocker for routine dotfile edits
-- ❌ Do NOT require Dolt/beads setup just to change personal config
+```bash
+bash -n scripts/*
+just --list
+make migrate-inventory
+make migrate-verify
+```
+
+Run only the commands relevant to the files you changed.
+
+## Architecture Overview
+
+- `config/` contains files mapped into `$HOME`.
+- `scripts/` contains repo tooling for bootstrap, linking, adoption, and chezmoi workflows.
+- `Justfile` is the main command surface for common tasks.
+- `makefile` contains migration and verification helpers.
+- `docs/` contains setup notes, migration notes, and personal reference docs.
+
+## Conventions & Patterns
+
+- Prefer `just` recipes for documented workflows.
+- Prefer small shell scripts over heavy tooling.
+- Keep docs aligned with actual commands and file mappings.
+- For symlink-managed files, use `just sync` after pulling new repo changes.
+- Avoid introducing process overhead unless it clearly helps.
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is not complete until `git push` succeeds.
+When ending a work session:
 
-**MANDATORY WORKFLOW:**
+1. Run relevant validation for the changes made.
+2. Summarize any remaining follow-up work in the handoff.
+3. Push all committed changes:
 
-1. **Run quality gates** (if code changed) - tests, linters, builds, or basic script validation
-2. **Summarize remaining work** - mention any follow-up in the handoff
-3. **PUSH TO REMOTE** - this is mandatory:
-   ```bash
-   git pull --rebase
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-4. **Verify** - all intended changes are committed and pushed
-5. **Hand off** - provide concise context for the next session
+```bash
+git pull --rebase
+git push
+git status  # must show up to date with origin
+```
 
-**OPTIONAL when using bd:**
+If `bd` was used and is configured, optionally run:
 
 ```bash
 bd dolt push
 ```
 
-Only run that if `bd` is configured and you actually used it during the session.
+## Critical Rules
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-
-<!-- END BEADS INTEGRATION -->
-
-
-## Build & Test
-
-_Add your build and test commands here_
-
-```bash
-# Example:
-# npm install
-# npm test
-```
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
+- Work is not complete until `git push` succeeds.
+- Do not leave committed work only in the local repo.
+- Do not make optional tooling a blocker for routine dotfile maintenance.
