@@ -3,3 +3,6 @@
 -- Add any additional options here
 vim.opt.relativenumber = false
 vim.g.lazyvim_php_lsp = "intelephense"
+
+-- Write through symlinks (needed for dotfile repos managed with stow/symlinks)
+vim.opt.backupcopy = "yes"
