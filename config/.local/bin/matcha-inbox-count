@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""Show folder counts for a Matcha OAuth account via IMAP."""
+
+from __future__ import annotations
+
+import argparse
+import email.header
+import imaplib
+import json
+import subprocess
+import sys
+from email.parser import BytesHeaderParser
+from pathlib import Path
+
+CONFIG_PATH = Path.home() / ".config" / "matcha" / "config.json"
+DEFAULT_IMAP = {
+    "gmail": ("imap.gmail.com", 993),
+    "outlook": ("outlook.office365.com", 993),
+    "icloud": ("imap.mail.me.com", 993),
+}
+
+
+def die(message: str, code: int = 1) -> None:
+    print(f"matcha-inbox-count: {message}", file=sys.stderr)
+    raise SystemExit(code)
+
+
+def load_config() -> dict:
+    try:
+        return json.loads(CONFIG_PATH.read_text())
+    except FileNotFoundError:
+        die(f"Matcha config not found at {CONFIG_PATH}")
+    except json.JSONDecodeError as exc:
+        die(f"could not parse {CONFIG_PATH}: {exc}")
+
+
+def resolve_account(config: dict, requested_email: str | None) -> dict:
+    accounts = config.get("accounts") or []
+    if not accounts:
+        die("no Matcha accounts configured")
+
+    if not requested_email:
+        return accounts[0]
+
+    target = requested_email.strip().lower()
+    for account in accounts:
+        for key in ("email", "fetch_email"):
+            value = (account.get(key) or "").strip().lower()
+            if value == target:
+                return account
+
+    die(f"no Matcha account matches '{requested_email}'")
+
+
+def resolve_imap(account: dict) -> tuple[str, int]:
+    server = (account.get("imap_server") or "").strip()
+    port = account.get("imap_port")
+    provider = (account.get("service_provider") or "").strip().lower()
+
+    if server:
+        return server, int(port or 993)
+
+    if provider in DEFAULT_IMAP:
+        return DEFAULT_IMAP[provider]
+
+    die("could not determine IMAP server from Matcha config")
+
+
+def get_token(login_email: str) -> str:
+    try:
+        result = subprocess.run(
+            ["matcha", "oauth", "token", login_email],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        die("'matcha' is not installed or not in PATH")
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.strip() or exc.stdout.strip() or str(exc)
+        die(f"could not get OAuth token for {login_email}: {detail}")
+
+    token = result.stdout.strip()
+    if not token:
+        die(f"empty OAuth token returned for {login_email}")
+    return token
+
+
+def decode_header_value(value: str) -> str:
+    decoded: list[str] = []
+    for chunk, charset in email.header.decode_header(value or ""):
+        if isinstance(chunk, bytes):
+            decoded.append(chunk.decode(charset or "utf-8", errors="replace"))
+        else:
+            decoded.append(chunk)
+    return "".join(decoded)
+
+
+def fetch_recent_headers(mail: imaplib.IMAP4_SSL, count: int) -> list[dict[str, str]]:
+    typ, data = mail.search(None, "ALL")
+    if typ != "OK" or not data or not data[0]:
+        return []
+
+    ids = data[0].split()[-count:]
+    if not ids:
+        return []
+
+    typ, msgdata = mail.fetch(b",".join(ids), "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])")
+    if typ != "OK":
+        return []
+
+    rows: list[dict[str, str]] = []
+    for item in msgdata:
+        if not isinstance(item, tuple):
+            continue
+        parsed = BytesHeaderParser().parsebytes(item[1])
+        rows.append(
+            {
+                "from": decode_header_value(parsed.get("From", "")),
+                "subject": decode_header_value(parsed.get("Subject", "")),
+                "date": parsed.get("Date", ""),
+            }
+        )
+    return rows
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Show IMAP folder counts for a Matcha OAuth account."
+    )
+    parser.add_argument(
+        "email",
+        nargs="?",
+        help="Matcha account email. Defaults to the first account in ~/.config/matcha/config.json",
+    )
+    parser.add_argument(
+        "--folder",
+        default="INBOX",
+        help="Folder to inspect (default: INBOX)",
+    )
+    parser.add_argument(
+        "--subjects",
+        type=int,
+        default=0,
+        help="Also print the newest N message headers",
+    )
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+    if args.subjects < 0:
+        die("--subjects must be 0 or greater")
+
+    config = load_config()
+    account = resolve_account(config, args.email)
+
+    auth_method = (account.get("auth_method") or "password").strip().lower()
+    if auth_method != "oauth2":
+        die(
+            f"account '{account.get('email', 'unknown')}' is using '{auth_method}', not oauth2"
+        )
+
+    login_email = (account.get("email") or "").strip()
+    if not login_email:
+        die("selected account has no login email configured")
+
+    server, port = resolve_imap(account)
+    token = get_token(login_email)
+    auth = f"user={login_email}\1auth=Bearer {token}\1\1".encode()
+
+    mail = imaplib.IMAP4_SSL(server, port)
+    try:
+        mail.authenticate("XOAUTH2", lambda _: auth)
+        typ, data = mail.select(args.folder)
+        if typ != "OK" or not data:
+            die(f"could not open folder '{args.folder}'")
+
+        count = int(data[0])
+        print(f"{args.folder} count: {count}")
+
+        if args.subjects > 0 and count > 0:
+            headers = fetch_recent_headers(mail, args.subjects)
+            if headers:
+                print("Recent messages:")
+                for index, row in enumerate(headers, start=1):
+                    sender = row["from"] or "(no from)"
+                    subject = row["subject"] or "(no subject)"
+                    date = row["date"] or "(no date)"
+                    print(f"{index}. {date} | {sender} | {subject}")
+    finally:
+        try:
+            mail.logout()
+        except Exception:
+            pass
+
+
+if __name__ == "__main__":
+    main()
