@@ -14,6 +14,11 @@ bootstrap *args:
 sync *args:
     {{dotfiles}}/scripts/bootstrap {{args}}
 
+# Pull latest from git and link any new/missing configs
+update *args:
+    cd {{dotfiles}} && git pull --rebase
+    {{dotfiles}}/scripts/bootstrap {{args}}
+
 # Discover files not yet managed by chezmoi
 migrate-inventory:
     cd {{dotfiles}} && make migrate-inventory
