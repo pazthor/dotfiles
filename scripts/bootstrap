@@ -53,7 +53,15 @@ while IFS= read -r repo_rel; do
   if "$script_dir/link-config" "${link_args[@]}"; then
     linked=$((linked + 1))
   else
-    failed=$((failed + 1))
+    status=$?
+    case $status in
+      2)
+        skipped=$((skipped + 1))
+        ;;
+      *)
+        failed=$((failed + 1))
+        ;;
+    esac
   fi
 done < <(git -C "$repo_root" ls-files -- 'config/' | grep -v '__pycache__')
 

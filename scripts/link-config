@@ -102,7 +102,7 @@ if [[ -f "$home_path" ]]; then
     echo
     if (( force == 0 )); then
       read -r -p "Replace home file with symlink to repo? Repo version wins. [y/N] " confirm
-      [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Aborted."; exit 1; }
+      [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Skipped: $home_path"; exit 2; }
     fi
   fi
   timestamp=$(date +%Y%m%d%H%M%S)
