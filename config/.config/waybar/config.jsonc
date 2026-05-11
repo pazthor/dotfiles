@@ -7,51 +7,58 @@
   "height": 10,
   "margin-bottom": 2,
   "modules-center": [
-     "mpris",
-      "custom/omarchy",  
-      "clock",
-      "custom/idle-indicator",
-      "custom/notification-silencing-indicator",
-      "custom/voxtype",
-      "custom/weather",
-      "battery",
-      "idle_inhibitor",
-      "custom/screenrecording-indicator",
-      "custom/updatespacman",
-      "custom/update",
-      "hyprland/workspaces",
-      "group/group-power"
-    ],
+    "mpris",
+    "custom/omarchy",
+    "clock",
+    "custom/idle-indicator",
+    "custom/notification-silencing-indicator",
+    "custom/voxtype",
+    "custom/weather",
+    "battery",
+    "idle_inhibitor",
+    "custom/screenrecording-indicator",
+    "custom/updatespacman",
+    "custom/update",
+    "hyprland/workspaces",
+    "group/group-power"
+  ],
   //"modules-center": ["hyprland/window"],
-//"modules-right": ["group/group-power"],
-
-"group/group-power": {
+  //"modules-right": ["group/group-power"],
+  "group/group-power": {
     "orientation": "horizontal",
     "drawer": {
-        "click-to-reveal": true,
-        "transition-duration": 500,
-        "children-class": "not-power",
-        "transition-left-to-right": true
+      "click-to-reveal": true,
+      "transition-duration": 500,
+      "children-class": "not-power",
+      "transition-left-to-right": true
     },
     "modules": [
-    "custom/trayicon",
-    "tray",
-    "backlight",
-    "bluetooth",
-    "pulseaudio#output",
-    "pulseaudio#input",
-    "network",
-    "power-profiles-daemon",
-    "memory",
-    "cpu"
+      "custom/trayicon",
+      "tray",
+      "backlight",
+      "bluetooth",
+      "pulseaudio#output",
+      "pulseaudio#input",
+      "network",
+      "power-profiles-daemon",
+      "memory",
+      "cpu"
     ]
-},
-
-
+  },
   "hyprland/workspaces": {
     "disable-scroll": true,
-    "all-outputs": true,
-    "cursor": true
+    "cursor": true,
+    "format": "{icon}",
+    "format-icons": {
+      "urgent": "",
+      "active": "", // focused workspace on current monitor
+      "visible": "", // focused workspace on other monitors
+      "default": "",
+      "empty": "" // persistent (created by this plugin)
+    },
+    "on-scroll-up": "hyprctl dispatch split-cycleworkspaces -1",
+    "on-scroll-down": "hyprctl dispatch split-cycleworkspaces +1",
+    "all-outputs": false // recommended
   },
   "custom/omarchy": {
     "format": "<span font='omarchy'>\ue900</span>",
@@ -80,7 +87,7 @@
     "on-click-right": "omarchy-voxtype-config",
     "on-click": "omarchy-voxtype-model"
   },
-    "custom/idle-indicator": {
+  "custom/idle-indicator": {
     "on-click": "omarchy-toggle-idle",
     "exec": "$OMARCHY_PATH/default/waybar/indicators/idle.sh",
     "signal": 9,
@@ -92,7 +99,7 @@
     "signal": 10,
     "return-type": "json"
   },
-   "custom/updatespacman": {
+  "custom/updatespacman": {
     "format": "{}{icon}",
     "return-type": "json",
     "format-icons": {
@@ -102,7 +109,7 @@
     "exec-if": "which waybar-module-pacman-updates",
     "exec": "waybar-module-pacman-updates --no-zero-output"
   },
-   "hyprland/window": {
+  "hyprland/window": {
     "format": "{title} - {class}",
     "max-length": 40,
     "rewrite": {
@@ -126,7 +133,7 @@
       "(.*) - com.obsproject.Studio": "  $1 "
     }
   },
- "cpu": {
+  "cpu": {
     "interval": 2,
     "format": "{usage}% 󰍛",
     "on-click": "omarchy-launch-or-focus-tui btop"
@@ -136,7 +143,7 @@
     "format": "{percentage}%  ",
     "on-click": "omarchy-launch-or-focus-tui btop"
   },
- "clock": {
+  "clock": {
     "format": " {:%H:%M}",
     "format-alt": " {:%H:%M %D}",
     "tooltip-format": "<span>{calendar}</span>",
@@ -252,11 +259,11 @@
     ]
   },
   "custom/weather": {
-        "format": "{}°",
-        "tooltip": true,
-        "interval": 1800,
-        "exec": "wttrbar --nerd --location yourlocation",
-        "return-type": "json"
+    "format": "{}°",
+    "tooltip": true,
+    "interval": 1800,
+    "exec": "wttrbar --nerd --location yourlocation",
+    "return-type": "json"
   },
   "pulseaudio#input": {
     "format-source": "",
@@ -270,29 +277,31 @@
     "on-click-right": "pamixer -t",
     "on-scroll-up": "pactl set-source-volume @DEFAULT_SOURCE@ +1%",
     "on-scroll-down": "pactl set-source-volume @DEFAULT_SOURCE@ -1%",
-},
-"pulseaudio#output": {
+  },
+  "pulseaudio#output": {
     "format": "{icon}",
     "tooltip-format": "{icon}  {volume}%",
     "format-muted": " off",
     "format-icons": {
-        "default": [""]
+      "default": [
+        ""
+      ]
     },
     "max-volume": 100,
     "scroll-step": 2,
     "smooth-scrolling-threshold": 1,
     "on-click": "omarchy-launch-or-focus-tui wiremix",
     "on-click-right": "pamixer -t"
-},
+  },
   "tray": {
-   "icon-size": 12,
+    "icon-size": 12,
     "spacing": 5,
     "show-passive-items": true
   },
   "custom/trayicon": {
-        "format": "",
-         "tooltip": false
-    },
+    "format": "",
+    "tooltip": false
+  },
   "mpris": {
     "format": "{player_icon} {artist}-{title}",
     "format-paused": "<span color='grey'>{status_icon} {title}</span>",
@@ -305,7 +314,11 @@
     "status-icons": {
       "paused": "▶"
     },
-    "ignored-players": ["firefox", "chromium", "brave"]
+    "ignored-players": [
+      "firefox",
+      "chromium",
+      "brave"
+    ]
   },
   "custom/screenrecording-indicator": {
     "on-click": "omarchy-capture-screenrecording",
