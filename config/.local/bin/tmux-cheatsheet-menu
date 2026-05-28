@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+entries() {
+  cat <<'EOF'
+SUPER ALT + Return                 → Abrir o adjuntarse a tmux Work
+CTRL + Space                       → Prefix principal
+CTRL + b                           → Prefix alternativo
+Prefix + q                         → Recargar tmux config
+Prefix + h                         → Split vertical / pane abajo
+Prefix + v                         → Split horizontal / pane derecha
+Prefix + x                         → Cerrar pane
+CTRL ALT + ←                       → Foco pane izquierdo
+CTRL ALT + →                       → Foco pane derecho
+CTRL ALT + ↑                       → Foco pane superior
+CTRL ALT + ↓                       → Foco pane inferior
+CTRL ALT SHIFT + ←                 → Resize pane izquierda
+CTRL ALT SHIFT + →                 → Resize pane derecha
+CTRL ALT SHIFT + ↑                 → Resize pane arriba
+CTRL ALT SHIFT + ↓                 → Resize pane abajo
+Prefix + c                         → Crear window en cwd actual
+Prefix + k                         → Cerrar window
+Prefix + r                         → Renombrar window
+ALT + 1..9                         → Ir a window 1..9
+ALT + ←                            → Window anterior
+ALT + →                            → Window siguiente
+ALT SHIFT + ←                      → Mover window a la izquierda
+ALT SHIFT + →                      → Mover window a la derecha
+Prefix + C                         → Crear sesión
+Prefix + K                         → Cerrar sesión
+Prefix + R                         → Renombrar sesión
+Prefix + P                         → Sesión anterior
+Prefix + N                         → Sesión siguiente
+ALT + ↑                            → Sesión anterior
+ALT + ↓                            → Sesión siguiente
+Prefix + [                         → Entrar a copy mode
+v                                  → Iniciar selección en copy mode
+y                                  → Copiar selección y salir
+/                                  → Buscar hacia adelante
+?                                  → Buscar hacia atrás
+n                                  → Siguiente resultado
+N                                  → Resultado anterior
+EOF
+}
+
+if [[ ${1:-} == "--print" || ${1:-} == "-p" ]]; then
+  entries
+  exit 0
+fi
+
+if command -v walker >/dev/null 2>&1; then
+  monitor_height=$(hyprctl monitors -j 2>/dev/null | jq -r '.[] | select(.focused == true) | .height' 2>/dev/null || true)
+  if [[ ! $monitor_height =~ ^[0-9]+$ ]]; then
+    monitor_height=1440
+  fi
+  menu_height=$((monitor_height * 45 / 100))
+
+  entries | walker --dmenu -p 'Tmux keybindings' --width 900 --height "$menu_height"
+else
+  entries
+fi
