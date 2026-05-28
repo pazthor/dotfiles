@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Print the active terminal's current directory, including the current tmux pane.
+# Omarchy's stock helper only looks at the terminal's direct shell child; when the
+# active terminal is a tmux client, that falls back to $HOME. This helper first
+# matches the active terminal's process tree against tmux clients and returns the
+# focused pane path.
+
+fallback=${HOME:-/}
+
+terminal_pid=$(hyprctl activewindow 2>/dev/null | awk '/pid:/ { print $2; exit }')
+if [[ -z ${terminal_pid:-} || ! -d /proc/$terminal_pid ]]; then
+  printf '%s\n' "$fallback"
+  exit 0
+fi
+
+list_descendants() {
+  local -a queue=("$1")
+  local pid child
+
+  while ((${#queue[@]})); do
+    pid=${queue[0]}
+    queue=("${queue[@]:1}")
+
+    while read -r child; do
+      [[ -n $child ]] || continue
+      printf '%s\n' "$child"
+      queue+=("$child")
+    done < <(pgrep -P "$pid" 2>/dev/null || true)
+  done
+}
+
+valid_dir() {
+  [[ -n ${1:-} && -d $1 ]]
+}
+
+# Prefer tmux's idea of the focused pane for the client attached to this terminal.
+if command -v tmux >/dev/null 2>&1; then
+  pids=$(list_descendants "$terminal_pid")
+  clients=$(tmux list-clients -F '#{client_pid}\t#{pane_current_path}' 2>/dev/null || true)
+
+  while read -r pid; do
+    cwd=$(awk -F '\t' -v pid="$pid" '$1 == pid { print $2; exit }' <<< "$clients")
+
+    if valid_dir "$cwd"; then
+      printf '%s\n' "$cwd"
+      exit 0
+    fi
+  done <<< "$pids"
+fi
+
+# Fall back to the active shell cwd for non-tmux terminals.
+while read -r pid; do
+  exe=$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)
+  cwd=$(readlink -f "/proc/$pid/cwd" 2>/dev/null || true)
+
+  if [[ -n $exe ]] && grep -qxF "$exe" /etc/shells 2>/dev/null && valid_dir "$cwd"; then
+    printf '%s\n' "$cwd"
+    exit 0
+  fi
+done < <({ list_descendants "$terminal_pid"; printf '%s\n' "$terminal_pid"; } | awk '!seen[$0]++')
+
+printf '%s\n' "$fallback"
