@@ -42,6 +42,8 @@ just apply    # apply changes to your home directory
 
 That's it. Your config files are now managed by chezmoi.
 
+For the pi coding agent (install, auth, skills), see [pi-setup.md](pi-setup.md).
+
 ---
 
 ## Daily usage with `just`
