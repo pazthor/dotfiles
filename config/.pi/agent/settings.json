@@ -4,8 +4,9 @@
     "npm:pi-subagents",
     "npm:@devkade/pi-plan"
   ],
-  "defaultProvider": "cursor",
-  "defaultModel": "auto",
-  "defaultThinkingLevel": "low",
-  "theme": "dark"
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "medium",
+  "theme": "dark",
+  "lastChangelogVersion": "0.78.0"
 }
