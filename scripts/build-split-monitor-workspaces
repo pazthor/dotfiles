@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Builds split-monitor-workspaces for the currently running Hyprland version.
+# Run this after a Hyprland update or on a new machine.
+# Output: ~/.config/hypr/plugins/split-monitor-workspaces.so
+
+set -euo pipefail
+
+PLUGIN_REPO="https://github.com/Duckonaut/split-monitor-workspaces"
+INSTALL_DIR="$HOME/.config/hypr/plugins"
+BUILD_DIR="$(mktemp -d)"
+
+cleanup() { rm -rf "$BUILD_DIR"; }
+trap cleanup EXIT
+
+# Detect running Hyprland version
+if ! command -v hyprctl &>/dev/null; then
+    echo "error: hyprctl not found — is Hyprland running?" >&2
+    exit 1
+fi
+HYPR_VERSION=$(hyprctl version | awk '/^Hyprland/{print $2}')
+echo "Hyprland version: $HYPR_VERSION"
+
+# Clone the plugin repo
+echo "Cloning plugin repo..."
+git clone --quiet "$PLUGIN_REPO" "$BUILD_DIR/src"
+cd "$BUILD_DIR/src"
+
+# Find the commit that pins to the running Hyprland version
+PIN_COMMIT=$(git log --oneline | awk "/pin to $HYPR_VERSION/{print \$1; exit}")
+if [[ -z "$PIN_COMMIT" ]]; then
+    echo "warning: no exact pin commit found for $HYPR_VERSION, using latest main" >&2
+    PIN_COMMIT="HEAD"
+fi
+echo "Checking out plugin at $PIN_COMMIT"
+git checkout --quiet "$PIN_COMMIT"
+
+# Patch: SMonitorRule field renamed from m_disabled to disabled in Hyprland ~0.54.x
+# Safe to apply regardless — the old name no longer exists in headers.
+sed -i 's/m_activeMonitorRule\.m_disabled/m_activeMonitorRule.disabled/g' src/main.cpp
+
+# Build
+echo "Building..."
+make all
+
+# Install
+mkdir -p "$INSTALL_DIR"
+cp split-monitor-workspaces.so "$INSTALL_DIR/split-monitor-workspaces.so"
+echo "Installed to $INSTALL_DIR/split-monitor-workspaces.so"
+
+# Load into running session if possible
+if hyprctl plugin list | grep -q "split-monitor-workspaces"; then
+    echo "Plugin already loaded — reloading..."
+    hyprctl plugin unload "$INSTALL_DIR/split-monitor-workspaces.so" 2>/dev/null || true
+fi
+hyprctl plugin load "$INSTALL_DIR/split-monitor-workspaces.so"
+echo "Plugin loaded."
