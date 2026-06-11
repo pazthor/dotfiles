@@ -6,18 +6,63 @@ usage() {
 yt-dlp-whatsapp - Download a YouTube video and convert it for WhatsApp.
 
 Usage:
-  yt-dlp-whatsapp [--output PATH] [--max-size MB] URL
+  yt-dlp-whatsapp [--output PATH] [--max-size MB] [--keep-open] URL
 
 Options:
   --output PATH   Where to write the final converted file.
                   Defaults to <video-title>-whatsapp.mp4 in the current directory.
   --max-size MB   Target size in megabytes (default: 16).
+  --keep-open     Wait for a keypress before exiting, even on success. Useful when
+                  launched from a GUI/floating terminal that closes when the command
+                  ends. Can also be set with YT_DLP_WHATSAPP_KEEP_OPEN=1.
+                  (On failure, an interactive run always pauses so you can read the
+                  error, unless YT_DLP_WHATSAPP_KEEP_OPEN=never.)
 USAGE
 }
+
+# State touched by the exit handler is global so the trap can see it no matter
+# where (or how early) the script exits.
+output=""
+tmpdir=""
+keep_open="${YT_DLP_WHATSAPP_KEEP_OPEN:-auto}"
 
 die() {
   printf 'yt-dlp-whatsapp: %s\n' "$1" >&2
   exit "${2:-1}"
+}
+
+# Pause so a GUI-spawned terminal doesn't vanish before the user reads the output.
+# - success: only when keep_open is explicitly requested
+# - failure: whenever interactive, unless keep_open=never
+pause_if_wanted() {
+  local code=$1
+  case "${keep_open}" in
+    never|0|no|false) return 0 ;;
+  esac
+  local want=no
+  if [[ "${keep_open}" == "always" || "${keep_open}" == "1" || "${keep_open}" == "yes" || "${keep_open}" == "true" ]]; then
+    want=yes
+  elif (( code != 0 )) && [[ -t 0 ]]; then
+    # auto: pause on failure for interactive runs
+    want=yes
+  fi
+  [[ "${want}" == "yes" && -t 0 ]] || return 0
+  printf '\nPress Enter to close…' >&2
+  read -r _ || true
+  return 0
+}
+
+on_exit() {
+  local code=$?
+  if (( code == 0 )); then
+    printf '\n✅ Done: %s\n' "${output:-<no output produced>}" >&2
+  else
+    printf '\n❌ yt-dlp-whatsapp failed (exit %s). See the messages above.\n' "${code}" >&2
+  fi
+  [[ -n "${tmpdir}" ]] && rm -rf -- "${tmpdir}"
+  pause_if_wanted "${code}"
+  # Preserve the original exit code; the trap's own commands must not clobber it.
+  exit "${code}"
 }
 
 require_command() {
@@ -27,13 +72,14 @@ require_command() {
 }
 
 main() {
-  local url="" output="" max_size_mb=""
+  local url="" max_size_mb=""
 
   while (($#)); do
     case "$1" in
       --help|-h) usage; exit 0 ;;
       --output)  shift || die "missing value for --output"; output=$1 ;;
       --max-size) shift || die "missing value for --max-size"; max_size_mb=$1 ;;
+      --keep-open) keep_open="always" ;;
       --*) die "unknown option '$1'" ;;
       *)
         [[ -z "${url}" ]] || die "only one URL supported"
@@ -46,11 +92,9 @@ main() {
   require_command yt-dlp
   require_command whatsapp-video
 
-  local tmpdir
   tmpdir=$(mktemp -d)
-  trap 'rm -rf -- "${tmpdir}"' EXIT
 
-  printf 'yt-dlp-whatsapp: downloading %s\n' "${url}"
+  printf 'yt-dlp-whatsapp: downloading %s\n' "${url}" >&2
 
   local downloaded
   downloaded=$(
@@ -77,4 +121,5 @@ main() {
   whatsapp-video "${wa_args[@]}" -- "${downloaded}"
 }
 
+trap on_exit EXIT
 main "$@"

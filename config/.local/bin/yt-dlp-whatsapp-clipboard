@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# GUI entry point: read a URL from the Wayland clipboard and hand it to
+# yt-dlp-whatsapp. Meant to be launched from a floating terminal (see
+# yt-dl-whatsapp.desktop), so it keeps the window open until you press Enter,
+# whether the download succeeds or fails.
+
+pause() {
+  printf '\nPress Enter to close…' >&2
+  read -r _ || true
+}
+
+url="$(wl-paste 2>/dev/null || true)"
+url="${url//$'\n'/}"
+
+if [[ "${url}" != http://* && "${url}" != https://* ]]; then
+  printf 'No URL on the clipboard. Copy a video link first, then launch again.\n' >&2
+  printf 'Clipboard contained: %s\n' "${url:-<empty>}" >&2
+  pause
+  exit 1
+fi
+
+# --keep-open makes yt-dlp-whatsapp pause on success too; it already pauses on
+# failure for interactive runs, so the window never vanishes before you read it.
+exec yt-dlp-whatsapp --keep-open "$@" "${url}"
