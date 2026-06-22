@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Installs the pi coding agent CLI + extensions under the current @earendil-works scope.
+# Run on a new machine, or to repair a "Cannot find module '@earendil-works/pi-coding-agent'"
+# extension-load error caused by the old deprecated @mariozechner/* packages shadowing pi.
+# Idempotent.
+
+set -euo pipefail
+
+if ! command -v npm &>/dev/null; then
+    echo "error: npm not found — install Node (e.g. via mise) first" >&2
+    exit 1
+fi
+
+# The deprecated @mariozechner/pi-coding-agent owns the global `pi` bin symlink;
+# its presence makes the new install fail with EEXIST. Remove it first.
+if npm ls -g --depth=0 2>/dev/null | grep -q "@mariozechner/pi-coding-agent"; then
+    echo "Removing deprecated @mariozechner/pi-coding-agent..."
+    npm uninstall -g @mariozechner/pi-coding-agent
+fi
+
+echo "Installing @earendil-works/pi-coding-agent (CLI + peer deps)..."
+npm install -g @earendil-works/pi-coding-agent@latest
+
+echo "Installing/updating pi extensions..."
+npm install -g \
+    pi-subagents@latest \
+    @devkade/pi-plan@latest \
+    @netandreus/pi-cursor-provider@latest
+
+echo
+echo "pi -> $(readlink -f "$(command -v pi)")"
+echo "version: $(pi --version 2>&1 | head -1)"
+echo "Done. Run 'pi list' to confirm extensions are registered."
