@@ -5,11 +5,12 @@ post_apply_exec = "hyprctl reload"
 
 [static_template_values]
 # Adjust these defaults to match your panel
-default_res = "1920x1080"
-ac_refresh = "60.00000"
+# eDP-1 (ATNA60CL10) native mode is 2880x1800@120; scale 1.5 -> logical 1920x1200.
+default_res = "2880x1800"
+ac_refresh = "120.00000"
 ac_scale = "1.5"
 vrr_on_ac = "0"
-battery_refresh = "60.00000"
+battery_refresh = "120.00000"
 battery_scale = "1.5"
 vrr_on_battery = "0"
 

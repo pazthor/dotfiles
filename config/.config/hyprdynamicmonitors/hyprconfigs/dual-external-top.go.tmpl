@@ -1,1 +1,9 @@
-/home/pazthor/Code/dotfiles/config/.config/hyprdynamicmonitors/hyprconfigs/dual-external-top.go.tmpl
+{{- $laptop := index .MonitorsByTag "laptop" -}}
+{{- $external := index .MonitorsByTag "external" -}}
+# dual-external-top — external monitor on top, laptop below (AC power).
+# Values come from [static_template_values] in config.toml.
+# NOTE: the laptop's X/Y offset assumes a 3440x1440 ultrawide on top at scale 1.67
+#   and the laptop at native res / scale {{.ac_scale}}. Retune if the external
+#   monitor or scales differ (offset = where the laptop's top-left should sit).
+monitor={{$external.Name}},preferred,0x0,1.67,vrr,{{.vrr_on_ac}}
+monitor={{$laptop.Name}},{{.default_res}}@{{.ac_refresh}},70x863,{{.ac_scale}},vrr,{{.vrr_on_ac}}
