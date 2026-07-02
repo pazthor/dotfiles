@@ -21,3 +21,7 @@ export CURSOR_AGENT_PATH=/usr/bin/cursor-agent
 
 # Project shortcuts
 alias work='cd ~/Code/go-roam'
+
+# InShellisense shell integration (installed with mise/npm)
+# Keep this at the end; only whitespace may follow the plugin source.
+[ -f ~/.inshellisense/init/bash/init.sh ] && source ~/.inshellisense/init/bash/init.sh

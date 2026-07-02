@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Install/update InShellisense using mise when available.
+# Idempotent: safe to run on new machines or after pulling dotfiles.
+
+set -euo pipefail
+
+package="npm:@microsoft/inshellisense@latest"
+
+if command -v mise &>/dev/null; then
+    echo "Installing InShellisense with mise ($package)..."
+    mise use -g "$package"
+elif command -v npm &>/dev/null; then
+    echo "mise not found; installing InShellisense with npm..."
+    npm install -g @microsoft/inshellisense@latest
+else
+    echo "error: neither mise nor npm found — install mise/Node first" >&2
+    exit 1
+fi
+
+if ! command -v is &>/dev/null; then
+    echo "error: installed InShellisense, but 'is' is not on PATH" >&2
+    echo "Try opening a new shell or run: mise reshim" >&2
+    exit 1
+fi
+
+# Generate shell integration files used by config/.bashrc.
+echo "Generating bash integration..."
+is init bash >/dev/null
+
+echo
+echo "InShellisense version: $(is --version)"
+echo "Done. Open a new terminal, or run: source ~/.bashrc"

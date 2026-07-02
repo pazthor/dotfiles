@@ -19,6 +19,10 @@ update *args:
     cd {{dotfiles}} && git pull --rebase
     {{dotfiles}}/scripts/bootstrap {{args}}
 
+# Install/update InShellisense shell completions
+install-inshellisense:
+    {{dotfiles}}/scripts/install-inshellisense
+
 # Adopt a config file into the repo
 adopt path:
     {{dotfiles}}/scripts/adopt-config {{path}}
