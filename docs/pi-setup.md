@@ -29,6 +29,13 @@ cd ~/Code/dotfiles
 scripts/install-pi
 ```
 
+The installer uses `mise` when available and installs Node with `node@latest` by default.
+Override that with `MISE_NODE_TOOL`, for example:
+
+```bash
+MISE_NODE_TOOL=node@25 scripts/install-pi
+```
+
 ### 2. Apply dotfiles
 
 ```bash

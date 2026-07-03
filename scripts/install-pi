@@ -6,31 +6,54 @@
 
 set -euo pipefail
 
-if ! command -v npm &>/dev/null; then
-    echo "error: npm not found — install Node (e.g. via mise) first" >&2
+node_tool="${MISE_NODE_TOOL:-node@latest}"
+use_mise=0
+
+if command -v mise &>/dev/null; then
+    use_mise=1
+    echo "Installing Node via mise ($node_tool)..."
+    mise install "$node_tool"
+elif ! command -v npm &>/dev/null; then
+    echo "error: npm not found and mise is not installed" >&2
     exit 1
+fi
+
+npm_cmd=()
+pi_cmd=()
+
+if [[ "$use_mise" -eq 1 ]]; then
+    npm_cmd=(mise exec "$node_tool" -- npm)
+    pi_cmd=(mise exec "$node_tool" -- pi)
+else
+    npm_cmd=(npm)
+    pi_cmd=(pi)
 fi
 
 # The deprecated @mariozechner/pi-coding-agent owns the global `pi` bin symlink;
 # its presence makes the new install fail with EEXIST. Remove it first.
-if npm ls -g --depth=0 2>/dev/null | grep -q "@mariozechner/pi-coding-agent"; then
+if "${npm_cmd[@]}" ls -g --depth=0 2>/dev/null | grep -q "@mariozechner/pi-coding-agent"; then
     echo "Removing deprecated @mariozechner/pi-coding-agent..."
-    npm uninstall -g @mariozechner/pi-coding-agent
+    "${npm_cmd[@]}" uninstall -g @mariozechner/pi-coding-agent
 fi
 
 echo "Installing @earendil-works/pi-coding-agent..."
-npm install -g @earendil-works/pi-coding-agent@latest
+"${npm_cmd[@]}" install -g @earendil-works/pi-coding-agent@latest
 
 echo "Installing/updating pi packages..."
-npm install -g \
+"${npm_cmd[@]}" install -g \
     pi-subagents@latest \
     pi-cursor-sdk@latest \
     @devkade/pi-plan@latest \
     @netandreus/pi-cursor-provider@latest
 
 echo
-echo "pi -> $(readlink -f "$(command -v pi)")"
-if version=$(pi --version 2>&1); then
+if command -v pi &>/dev/null; then
+    echo "pi -> $(readlink -f "$(command -v pi)")"
+else
+    echo "pi -> managed by mise ($node_tool)"
+fi
+
+if version=$("${pi_cmd[@]}" --version 2>&1); then
     echo "version: $(printf '%s\n' "$version" | head -1)"
 else
     echo "error: pi installed but failed to execute:" >&2
