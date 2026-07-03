@@ -449,8 +449,8 @@ When adding plugin-dependent features:
 
 ## Related Documentation
 
-- `docs/split-monitor-workspace.md` - Original setup guide (for ASUS Zenbook)
-- `docs/split-monitor-workspaces-laptop-setup.md` - Laptop-specific guide
+- `docs/split-monitor-workspaces-laptop-setup.md` - Current native-Hyprland workspace setup
+- (Removed) `docs/split-monitor-workspace.md` - the original plugin setup guide; the plugin was dropped, so this postmortem is the surviving record
 - Plugin repository: https://github.com/Duckonaut/split-monitor-workspaces
 - Hyprland plugin guide: https://wiki.hyprland.org/Plugins/Using-Plugins/
 
