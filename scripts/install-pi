@@ -18,16 +18,23 @@ if npm ls -g --depth=0 2>/dev/null | grep -q "@mariozechner/pi-coding-agent"; th
     npm uninstall -g @mariozechner/pi-coding-agent
 fi
 
-echo "Installing @earendil-works/pi-coding-agent (CLI + peer deps)..."
+echo "Installing @earendil-works/pi-coding-agent..."
 npm install -g @earendil-works/pi-coding-agent@latest
 
-echo "Installing/updating pi extensions..."
+echo "Installing/updating pi packages..."
 npm install -g \
     pi-subagents@latest \
+    pi-cursor-sdk@latest \
     @devkade/pi-plan@latest \
     @netandreus/pi-cursor-provider@latest
 
 echo
 echo "pi -> $(readlink -f "$(command -v pi)")"
-echo "version: $(pi --version 2>&1 | head -1)"
+if version=$(pi --version 2>&1); then
+    echo "version: $(printf '%s\n' "$version" | head -1)"
+else
+    echo "error: pi installed but failed to execute:" >&2
+    printf '%s\n' "$version" >&2
+    exit 1
+fi
 echo "Done. Run 'pi list' to confirm extensions are registered."

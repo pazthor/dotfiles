@@ -25,8 +25,8 @@ Pi loads skills from `~/.pi/agent/skills/` by default — no `skills` entry need
 ### 1. Install pi
 
 ```bash
-npm install -g @earendil-works/pi-coding-agent
-# or via mise/node version manager
+cd ~/Code/dotfiles
+scripts/install-pi
 ```
 
 ### 2. Apply dotfiles
