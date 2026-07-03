@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# Toggle VITURE / XR head-tracking (XRLinuxDriver) on or off, with an OSD.
+# Bound to SUPER+F12 in ~/.config/hypr/bindings.conf.
+set -eu
+
+CLI="$HOME/.local/bin/xr_driver_cli"
+
+if [ ! -x "$CLI" ]; then
+  notify-send -u critical "XR driver" "xr_driver_cli not found — is XRLinuxDriver installed?"
+  exit 1
+fi
+
+# --status prints "enabled" or "disabled".
+if [ "$("$CLI" --status 2>/dev/null)" = "enabled" ]; then
+  "$CLI" --disable
+  notify-send -t 1500 -i input-mouse "XR head-tracking" "Disabled — cursor no longer follows your head"
+else
+  "$CLI" --enable
+  notify-send -t 1500 -i input-mouse "XR head-tracking" "Enabled — move your head to move the cursor"
+fi
