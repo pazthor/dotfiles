@@ -6,11 +6,18 @@
 
 set -euo pipefail
 
-node_tool="${MISE_NODE_TOOL:-node@latest}"
+node_tool="${MISE_NODE_TOOL:-}"
 use_mise=0
 
 if command -v mise &>/dev/null; then
     use_mise=1
+    if [[ -z "$node_tool" ]]; then
+        node_tool="$(mise current node 2>/dev/null | awk 'NR == 1 { print $1 }')"
+        node_tool="${node_tool:-node@latest}"
+    fi
+    if [[ "$node_tool" != node@* ]]; then
+        node_tool="node@$node_tool"
+    fi
     echo "Installing Node via mise ($node_tool)..."
     mise install "$node_tool"
 elif ! command -v npm &>/dev/null; then
@@ -53,11 +60,23 @@ else
     echo "pi -> managed by mise ($node_tool)"
 fi
 
-if version=$("${pi_cmd[@]}" --version 2>&1); then
-    echo "version: $(printf '%s\n' "$version" | head -1)"
+if version_output=$("${pi_cmd[@]}" --version 2>&1); then
+    version="$(printf '%s\n' "$version_output" | awk '/^[0-9]+[.][0-9]+[.][0-9]+/ { print; exit }')"
+    echo "version: ${version:-$version_output}"
 else
     echo "error: pi installed but failed to execute:" >&2
-    printf '%s\n' "$version" >&2
+    printf '%s\n' "$version_output" >&2
     exit 1
+fi
+
+if command -v pi &>/dev/null; then
+    if path_version_output="$(pi --version 2>&1)"; then
+        path_version="$(printf '%s\n' "$path_version_output" | awk '/^[0-9]+[.][0-9]+[.][0-9]+/ { print; exit }')"
+        echo "path version: ${path_version:-$path_version_output}"
+    else
+        echo "error: pi on PATH failed to execute:" >&2
+        printf '%s\n' "$path_version_output" >&2
+        exit 1
+    fi
 fi
 echo "Done. Run 'pi list' to confirm extensions are registered."

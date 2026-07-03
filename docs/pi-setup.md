@@ -29,7 +29,8 @@ cd ~/Code/dotfiles
 scripts/install-pi
 ```
 
-The installer uses `mise` when available and installs Node with `node@latest` by default.
+The installer uses `mise` when available and installs into the active mise Node
+version by default, so the plain `pi` command on your `PATH` is updated.
 Override that with `MISE_NODE_TOOL`, for example:
 
 ```bash
