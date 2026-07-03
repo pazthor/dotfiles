@@ -3,7 +3,8 @@
     "npm:@netandreus/pi-cursor-provider",
     "npm:pi-subagents",
     "npm:@devkade/pi-plan",
-    "npm:pi-cursor-sdk"
+    "npm:pi-cursor-sdk",
+    "npm:pi-claude-cli"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
