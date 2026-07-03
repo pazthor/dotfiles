@@ -1,6 +1,6 @@
 # pi coding agent setup
 
-This repo tracks pi configuration under `config/.pi/`. Bootstrap/chezmoi links it into `~/.pi/`.
+This repo tracks pi configuration under `config/.pi/`. `scripts/bootstrap` symlinks it into `~/.pi/`.
 
 ## What is versioned
 
@@ -40,8 +40,7 @@ MISE_NODE_TOOL=node@25 scripts/install-pi
 
 ```bash
 cd ~/Code/dotfiles
-just import    # first time: register with chezmoi
-just apply     # or: just sync / scripts/bootstrap
+just bootstrap    # or: just sync / scripts/bootstrap
 ```
 
 This links `config/.pi/` → `~/.pi/` (settings, extensions, prompts, skills).

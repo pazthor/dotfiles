@@ -84,7 +84,7 @@ Sample mappings:
   config/bin/my-script -> ~/bin/my-script
 
 Scripts handling:
-  - scripts/ at repo root contains repository tooling (adopt-config, stow-pack, etc.).
+  - scripts/ at repo root contains repository tooling (adopt-config, bootstrap, link-config, etc.).
   - dotfiles intended for ~/bin, ~/.local/bin, etc. belong under config/ (for example config/bin/tool).
 SAMPLES
 }

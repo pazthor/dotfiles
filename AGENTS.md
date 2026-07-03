@@ -25,19 +25,18 @@ Use lightweight validation appropriate to the change.
 ```bash
 bash -n scripts/*
 just --list
-make migrate-inventory
-make migrate-verify
+./scripts/bootstrap --dry-run
 ```
 
 Run only the commands relevant to the files you changed.
 
 ## Architecture Overview
 
-- `config/` contains files mapped into `$HOME`.
-- `scripts/` contains repo tooling for bootstrap, linking, adoption, and chezmoi workflows.
+- `config/` contains files symlinked into `$HOME`.
+- `scripts/` contains repo tooling for bootstrap, linking, and adoption (absolute symlinks; no Stow or chezmoi).
 - `Justfile` is the main command surface for common tasks.
-- `makefile` contains migration and verification helpers.
-- `docs/` contains setup notes, migration notes, and personal reference docs.
+- `makefile` is a thin wrapper over the same scripts.
+- `docs/` contains setup notes and personal reference docs.
 
 ## Conventions & Patterns
 

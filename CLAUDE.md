@@ -16,7 +16,9 @@ All scripts live in `scripts/` and are executable:
 |---|---|
 | `scripts/adopt-config <path>` | Import an existing file: copies it into repo, replaces original with symlink, stages it |
 | `scripts/adopt <path>` | Alias for `adopt-config` |
-| `scripts/stow-pack [stow-opts] <pkg>` | Wrapper around GNU Stow with `--dir ~/Code/dotfiles --target ~` preset |
+| `scripts/adopt-verify [path]` | Print canonical `config/… → $HOME/…` path mappings (no changes) |
+| `scripts/link-config <path>` | Link a single already-tracked repo file back to its home location |
+| `scripts/bootstrap [--dry-run\|--force]` | Link **every** tracked `config/` file into `$HOME` (idempotent) |
 | `scripts/status` | Quick `git status` for the repo |
 | `scripts/help` | Print tutorial + README |
 
@@ -26,33 +28,29 @@ All scripts live in `scripts/` and are executable:
 - Creates a timestamped backup (`<original>.bak.<timestamp>`) before replacing with symlink
 - Stages the new file with `git add` automatically
 
-### stow-pack behavior
+## Linking model
 
-- Expects GNU Stow package directories at repo root (e.g., `hypr/`, `waybar/`)
-- Each package dir mirrors the home layout: `hypr/.config/hypr/...`
-- Use `--restow` to refresh links, `--delete` to remove links
+There is **one** mechanism: absolute symlinks from `$HOME` into `config/`, created
+by the scripts above. GNU Stow and chezmoi are **not** used — do not reintroduce
+them. `config/` is the single tree and mirrors the home layout under
+`config/.config/...`, `config/.local/...`, `config/bin/...`, etc.
 
-## Adopt-then-Stow Workflow
-
-1. Adopt a file with `adopt-config` (creates symlink in place)
-2. Move the adopted file into a Stow package dir: `mv config/.config/hypr/foo.conf hypr/.config/hypr/foo.conf`
-3. Remove the old direct symlink and re-link via Stow: `stow-pack hypr`
-
-Once in a Stow package, use `stow-pack --restow <pkg>` for day-to-day link management.
-
-The current active Stow package is `config/`, which holds all adopted config files. Its structure mirrors the home directory under `config/.config/...`.
+- Adopt a new file: `scripts/adopt-config ~/.config/hypr/foo.conf`
+- Re-link one existing tracked file: `scripts/link-config ~/.config/hypr/foo.conf`
+- Re-link everything (new machine or after a pull): `scripts/bootstrap`
 
 ## Bootstrapping on a New Machine
 
 ```bash
 git clone <repo> ~/Code/dotfiles
-~/Code/dotfiles/scripts/stow-pack hypr
-# repeat for each package
+~/Code/dotfiles/scripts/bootstrap
 ```
 
-## makefile
+## makefile / Justfile
 
-The makefile currently has a broken `adot-config` target (typo — tracked as a known issue). No build system is used; scripts are plain bash.
+No build system is used; scripts are plain bash. The `makefile` and `Justfile`
+are thin wrappers over `scripts/` (`bootstrap`, `adopt-config`, `adopt-verify`).
+`make adot-config` is a deprecated alias that forwards to `adopt-config`.
 
 ## What NOT to edit
 

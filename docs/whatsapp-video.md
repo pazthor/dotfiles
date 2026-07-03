@@ -1,6 +1,6 @@
 # whatsapp-video helper
 
-`whatsapp-video` converts any input video into a WhatsApp-friendly MP4 so it can be shared without the app recompressing it into a blurry mess. The script lives in `config/.local/bin/whatsapp-video` as a first-class executable managed directly by chezmoi.
+`whatsapp-video` converts any input video into a WhatsApp-friendly MP4 so it can be shared without the app recompressing it into a blurry mess. The script lives in `config/.local/bin/whatsapp-video` as a first-class executable symlinked into `~/.local/bin/`.
 
 ## Prerequisites
 

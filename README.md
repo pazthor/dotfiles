@@ -28,11 +28,11 @@ Before importing, you can preview canonical mappings:
 If you have [just](https://github.com/casey/just) installed, these recipes wrap the common workflows:
 
 ```bash
-just migrate-inventory   # discover files not yet in chezmoi
-just import              # import all files into chezmoi
-just review              # preview pending changes
-just apply               # apply changes
-just adopt ~/.config/hypr/bindings.conf  # adopt a single file
+just bootstrap          # link every tracked config into $HOME (idempotent)
+just sync               # same as bootstrap; run after `git pull`
+just update             # git pull --rebase, then re-link new/missing configs
+just adopt ~/.config/hypr/bindings.conf  # adopt a single file into the repo
+just verify ~/.config/hypr/bindings.conf # preview a path mapping
 ```
 
 Run `just` with no arguments to see all available recipes.
@@ -135,104 +135,32 @@ Check repo status quickly:
 ~/Code/dotfiles/scripts/status
 ```
 
-Run stow with repo defaults (`--dir ~/Code/dotfiles --target ~`):
+## Re-linking everything (`scripts/bootstrap`)
+
+`scripts/adopt-config` imports one file at a time. To (re)create every symlink
+in one pass — after cloning on a new machine, or after `git pull` adds new
+tracked files — use `scripts/bootstrap`. It walks every file under `config/`
+and links it into `$HOME` via `scripts/link-config`. It is idempotent, so it is
+safe to re-run.
 
 ```bash
-~/Code/dotfiles/scripts/stow-pack --restow hypr
+~/Code/dotfiles/scripts/bootstrap --dry-run   # preview what would be linked
+~/Code/dotfiles/scripts/bootstrap             # link everything
+~/Code/dotfiles/scripts/bootstrap --force     # overwrite differing home files
 ```
 
+Equivalent `just` recipes: `just bootstrap`, `just sync` (after a pull), and
+`just update` (pull + re-link).
 
-## Migration lifecycle (chezmoi)
-
-Use the explicit lifecycle commands in `makefile` when migrating tracked config into chezmoi:
+## Bootstrap on a new machine
 
 ```bash
-make migrate-inventory
-make migrate-import
-make migrate-diff
-make migrate-apply
-make migrate-verify
+git clone <repo> ~/Code/dotfiles
+~/Code/dotfiles/scripts/bootstrap
 ```
 
-- `migrate-inventory`: generate `.cache/chezmoi-migration-manifest.txt` from tracked config paths.
-- `migrate-import`: run `chezmoi add --follow` for each manifest entry.
-- `migrate-diff`: preview pending changes.
-- `migrate-apply`: enforce managed state.
-- `migrate-verify`: report missing paths or paths that are no longer symlinks.
-
-## Using GNU Stow with `scripts/adopt-config`
-
-`scripts/adopt-config` and Stow work well together when you split responsibilities:
-
-- `adopt-config`: import an existing local file into this repo without losing your current setup.
-- `stow`: recreate all symlinks cleanly on the same machine later, or on a new machine after cloning.
-
-### 1. Install Stow
-
-Examples:
-
-```bash
-# Arch
-sudo pacman -S stow
-
-# Debian/Ubuntu
-sudo apt install stow
-```
-
-### 2. Recommended Stow package layout
-
-Create package directories at repo root (one package per tool/topic):
-
-```text
-~/Code/dotfiles/
-├── hypr/
-│   └── .config/hypr/...
-├── waybar/
-│   └── .config/waybar/...
-└── scripts/
-```
-
-### 3. Adopt first, then move into a Stow package
-
-Example for `~/.config/hypr/hyprsunset.conf`:
-
-```bash
-# 1) Adopt with your helper script
-~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/hyprsunset.conf
-
-# 2) Move adopted file into a Stow package
-mkdir -p ~/Code/dotfiles/hypr/.config/hypr
-mv ~/Code/dotfiles/config/.config/hypr/hyprsunset.conf \
-  ~/Code/dotfiles/hypr/.config/hypr/hyprsunset.conf
-
-# 3) Replace old direct symlink with a Stow-managed symlink
-rm ~/.config/hypr/hyprsunset.conf
-stow --dir ~/Code/dotfiles --target ~ hypr
-```
-
-After this, the file is managed by Stow package `hypr`.
-
-### 4. Daily workflow with Stow
-
-```bash
-# Re-apply package links after file moves/renames
-~/Code/dotfiles/scripts/stow-pack --restow hypr
-
-# Remove package links
-~/Code/dotfiles/scripts/stow-pack --delete hypr
-```
-
-### 5. Bootstrap on a new machine
-
-After cloning this repo:
-
-```bash
-~/Code/dotfiles/scripts/stow-pack hypr
-# add more packages as you create them, for example:
-# ~/Code/dotfiles/scripts/stow-pack waybar
-```
-
-Tip: avoid storing dotfiles directly in repo root once you start using Stow packages. Keep them under package folders (`hypr/`, `waybar/`, etc.) so `stow` can manage them consistently.
+That single command links every tracked config into place — there are no
+separate packages to install.
 
 ## Notes
 

@@ -1,6 +1,10 @@
 # Getting Started
 
-This guide covers installing the dotfiles on a new machine and daily usage via `just` recipes and scripts.
+This guide covers installing the dotfiles on a new machine and daily usage via
+`just` recipes and scripts.
+
+The repo uses **one** mechanism: absolute symlinks from `$HOME` into `config/`.
+There is no Stow or chezmoi step.
 
 ---
 
@@ -10,13 +14,14 @@ This guide covers installing the dotfiles on a new machine and daily usage via `
 
 ```bash
 # Arch Linux
-sudo pacman -S git chezmoi just stow
+sudo pacman -S git just
 
 # Debian/Ubuntu
-sudo apt install git stow
-sh -c "$(curl -fsLS get.chezmoi.io)"         # install chezmoi
+sudo apt install git
 curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
 ```
+
+`just` is optional — every recipe is a thin wrapper over a script in `scripts/`.
 
 ### 2. Clone the repo
 
@@ -25,22 +30,19 @@ git clone git@github.com:pazthor/dotfiles.git ~/Code/dotfiles
 cd ~/Code/dotfiles
 ```
 
-### 3. Import all config files into chezmoi
+### 3. Link everything into `$HOME`
 
 ```bash
-just import
+just bootstrap
+# or, without just:
+scripts/bootstrap
 ```
 
-This discovers every file tracked in the repo and registers it with chezmoi. Files not yet present on disk are skipped with a warning — that is normal.
+This walks every file under `config/` and symlinks it into your home directory.
+It is idempotent, so it is safe to re-run. Preview first with
+`scripts/bootstrap --dry-run`; use `--force` to overwrite differing home files.
 
-### 4. Preview and apply
-
-```bash
-just review   # see what chezmoi will change
-just apply    # apply changes to your home directory
-```
-
-That's it. Your config files are now managed by chezmoi.
+That's it — your config files are now linked.
 
 For the pi coding agent (install, auth, skills), see [pi-setup.md](pi-setup.md).
 
@@ -62,7 +64,8 @@ When you edit a config file and want to start tracking it:
 just adopt ~/.config/hypr/bindings.conf
 ```
 
-This copies the file into the repo under `config/` and replaces the original with a symlink.
+This copies the file into the repo under `config/`, replaces the original with a
+symlink, and stages it with git.
 
 ### Preview a file's repo mapping
 
@@ -71,30 +74,17 @@ just verify ~/.config/hypr/bindings.conf
 just verify                                  # show all mappings
 ```
 
-### Review and apply pending changes
-
-```bash
-just review   # chezmoi diff — shows what would change
-just apply    # apply changes (prompts for confirmation)
-```
-
 ### Refresh after pulling changes
 
-If your home directory uses repo-backed symlinks, refresh links after `git pull`:
+Existing symlinks pick up repo edits immediately. After a `git pull` that adds
+new tracked files, re-link them:
 
 ```bash
 git pull
-just sync
+just sync        # links newly added files and repairs missing links
 ```
 
-Existing symlinks pick up repo edits immediately; `just sync` mainly links newly added files and repairs missing links.
-
-If you manage materialized files with chezmoi instead of symlinks, run `just apply` after pulling:
-
-```bash
-git pull
-just apply
-```
+`just update` combines both steps (`git pull --rebase`, then re-link).
 
 ### Full recipe list
 
@@ -102,17 +92,10 @@ just apply
 |---|---|
 | `just bootstrap [--force]` | Link or refresh repo-backed symlinks in `$HOME` |
 | `just sync [--force]` | Alias for `just bootstrap`; useful after `git pull` |
-| `just import` | Import all repo files into chezmoi |
-| `just review` | Preview pending chezmoi changes |
-| `just apply` | Apply chezmoi changes interactively |
+| `just update` | `git pull --rebase`, then re-link new/missing configs |
 | `just adopt <path>` | Adopt a file into the repo |
 | `just verify [path]` | Preview path mapping |
-| `just migrate` | Dry-run stow→chezmoi migration |
-| `just migrate-inventory` | List files not yet in chezmoi |
-| `just migrate-import` | Import via make target |
-| `just migrate-diff` | `chezmoi diff` via make |
-| `just migrate-apply` | `chezmoi apply` via make |
-| `just migrate-verify` | Verify symlinks via make |
+| `just ydv` | Download a video from a copied URL |
 
 ---
 
@@ -135,21 +118,11 @@ scripts/adopt-verify                              # print all mappings
 scripts/adopt-verify ~/.config/hypr/bindings.conf # check one path
 ```
 
-### chezmoi wrapper
+### Link one file / link everything
 
 ```bash
-scripts/chezmoi inventory         # list files not yet managed by chezmoi
-scripts/chezmoi add-follow <path> # safely add a file to chezmoi
-scripts/chezmoi review            # chezmoi diff
-scripts/chezmoi apply             # chezmoi apply (prompts)
-scripts/chezmoi apply --yes       # apply without prompting
-```
-
-### Migration script
-
-```bash
-scripts/migrate-stow-to-chezmoi --dry-run   # preview what would be imported
-scripts/migrate-stow-to-chezmoi --import    # run the full import
+scripts/link-config ~/.config/hypr/bindings.conf  # re-link a single tracked file
+scripts/bootstrap                                 # re-link every tracked file
 ```
 
 ### Repo status
@@ -163,11 +136,13 @@ scripts/help     # print the full tutorial
 
 ## Troubleshooting
 
-**`just import` shows warnings about missing targets**
-Files in the repo that aren't linked on this machine are skipped. This is expected — run `just sync` to create the missing symlinks first, then re-run `just import`.
+**`bootstrap` reports `skipped` files**
+Files already correctly symlinked are skipped — that is expected. `failed`
+counts are the ones to investigate.
 
-**`chezmoi apply` overwrites a file I didn't expect**
-Run `just review` before applying to see exactly what will change. If a file is managed by chezmoi but shouldn't be, remove it with `chezmoi forget <path>`.
+**A home file differs from the repo version**
+`bootstrap`/`link-config` refuse to clobber it by default. Inspect the
+difference, then re-run with `--force` once you're sure the repo copy should win.
 
 **A config file I edited isn't tracked yet**
-Run `just adopt ~/.config/path/to/file` to add it to the repo.
+Adopt it first with `scripts/adopt-config <path>`, then commit.
