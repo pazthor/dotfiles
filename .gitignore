@@ -5,3 +5,6 @@
 *.tmp
 .idea/
 .vscode/
+
+# Beads local Dolt state (runtime, versioned by Dolt, not git)
+.beads/

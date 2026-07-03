@@ -1,0 +1,16 @@
+#!/bin/bash
+# Omarchy post-update hook (tracked in ~/Code/dotfiles).
+# Runs via `omarchy-hook post-update` after an Omarchy system update.
+#
+# Use this to repair or refresh anything an Omarchy update may have touched
+# — e.g. re-notify, rebuild caches, or re-link dotfiles that got overwritten.
+#
+# Add real steps below. Keep each step guarded so a failure never blocks the
+# update (the omarchy-hook runner already reports non-zero exits).
+
+set -u
+
+# Example: confirm the update landed.
+# notify-send "Omarchy" "System update complete" 2>/dev/null || true
+
+exit 0
