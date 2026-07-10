@@ -1,0 +1,107 @@
+#!/usr/bin/env bash
+# Unlocks the bootloader on a Xiaomi Mi A3 (Android One, codename: laurel_sprout).
+# WARNING: This WIPES all data on the device. Back up first.
+# NOT for MIUI devices — does not use Mi Unlock Tool.
+
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME [--skip-confirm]
+
+Unlock the bootloader on a Xiaomi Mi A3 (Android One).
+
+Prerequisites (must be done manually before running this script):
+  1. Back up all data — this wipes the device completely
+  2. Enable Developer Options: Settings > About Phone > tap Build Number 7 times
+  3. Enable USB Debugging: Settings > System > Developer Options
+  4. Enable OEM Unlocking: Settings > System > Developer Options
+
+Options:
+  --skip-confirm   Skip the "are you sure" prompt (for scripted use)
+USAGE
+}
+
+skip_confirm=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --skip-confirm) skip_confirm=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+# Verify tools are available
+for tool in adb fastboot; do
+  if ! command -v "$tool" &>/dev/null; then
+    echo "error: '$tool' not found — run scripts/install-android-tools first" >&2
+    exit 1
+  fi
+done
+
+echo "=== Xiaomi Mi A3 Bootloader Unlock ==="
+echo
+echo "WARNING: This will FACTORY RESET your device. All data will be erased."
+echo
+
+if (( ! skip_confirm )); then
+  read -r -p "Have you backed up your data? (yes/no): " confirm
+  if [[ "$confirm" != "yes" ]]; then
+    echo "Aborted. Back up your data first."
+    exit 1
+  fi
+  echo
+fi
+
+# Step 1: Check for device in ADB mode
+echo "[1/4] Checking for device via ADB..."
+if ! adb devices | grep -q "device$"; then
+  echo "error: no device found via ADB" >&2
+  echo "  - Is USB Debugging enabled?" >&2
+  echo "  - Did you authorize this computer on the phone screen?" >&2
+  echo "  - Try: adb devices" >&2
+  exit 1
+fi
+echo "  Device found."
+
+# Step 2: Reboot to fastboot
+echo "[2/4] Rebooting to fastboot mode..."
+adb reboot bootloader
+echo "  Waiting for device in fastboot mode..."
+fastboot wait-for-device
+echo "  Device in fastboot."
+
+# Step 3: Verify it's a Mi A3
+echo "[3/4] Verifying device..."
+product=$(fastboot getvar product 2>&1 | grep "^product:" | awk '{print $2}' || true)
+if [[ -n "$product" && "$product" != "laurel_sprout" ]]; then
+  echo "warning: expected 'laurel_sprout', got '$product'" >&2
+  echo "  This script is written for the Xiaomi Mi A3. Proceed at your own risk." >&2
+  if (( ! skip_confirm )); then
+    read -r -p "Continue anyway? (yes/no): " cont
+    if [[ "$cont" != "yes" ]]; then
+      echo "Aborted."
+      fastboot reboot
+      exit 1
+    fi
+  fi
+fi
+
+# Step 4: Unlock
+echo "[4/4] Unlocking bootloader..."
+echo "  On the device screen: use Volume keys to select UNLOCK, confirm with Power button."
+echo
+fastboot flashing unlock
+
+echo
+echo "=== Done ==="
+echo "The device will wipe and reboot automatically."
+echo
+echo "After it reboots:"
+echo "  1. Complete initial setup"
+echo "  2. Re-enable USB Debugging (Settings > System > Developer Options)"
+echo "  3. Run the recovery flash script next"

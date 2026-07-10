@@ -7,9 +7,9 @@
     "npm:pi-claude-cli"
   ],
   "defaultProvider": "pi-claude-cli",
-  "defaultModel": "claude-opus-4-8",
+  "defaultModel": "claude-sonnet-4-6",
   "defaultThinkingLevel": "high",
-  "theme": "dark",
+  "theme": "light",
   "lastChangelogVersion": "0.80.3",
   "enabledModels": [
     "openai-codex/gpt-5.3-codex-spark",

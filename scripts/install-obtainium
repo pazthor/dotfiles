@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Downloads the latest Obtainium APK from GitHub and installs it to all connected ADB devices.
+# Idempotent — safe to re-run; will upgrade if already installed.
+
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+GITHUB_REPO="ImranR98/Obtainium"
+TMP_DIR=""
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME [--dry-run] [--apk <path>]
+
+Download the latest Obtainium release from GitHub and install it via ADB
+to every connected Android device.
+
+Options:
+  --apk <path>   Use a local APK instead of downloading from GitHub.
+  --dry-run      Print what would be done without installing.
+USAGE
+}
+
+cleanup() {
+  [[ -n "$TMP_DIR" && -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+dry_run=0
+local_apk=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=1; shift ;;
+    --apk) local_apk="$2"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+# Verify adb is available
+if ! command -v adb &>/dev/null; then
+  echo "error: adb not found — run scripts/install-android-tools first" >&2
+  exit 1
+fi
+
+# Check for connected devices
+mapfile -t devices < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+if [[ ${#devices[@]} -eq 0 ]]; then
+  echo "error: no devices connected via ADB" >&2
+  echo "  - Enable USB Debugging on the device" >&2
+  echo "  - Authorize this computer on the phone screen" >&2
+  echo "  - Try: adb devices" >&2
+  exit 1
+fi
+echo "Found ${#devices[@]} device(s): ${devices[*]}"
+
+# Resolve APK path
+if [[ -n "$local_apk" ]]; then
+  if [[ ! -f "$local_apk" ]]; then
+    echo "error: APK not found: $local_apk" >&2
+    exit 1
+  fi
+  apk_path="$local_apk"
+  echo "Using local APK: $apk_path"
+else
+  if ! command -v curl &>/dev/null; then
+    echo "error: curl not found — install curl or pass --apk <path>" >&2
+    exit 1
+  fi
+
+  echo "Fetching latest release info from GitHub..."
+  release_json=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest")
+
+  tag=$(printf '%s' "$release_json" | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+  apk_url=$(printf '%s' "$release_json" | grep '"browser_download_url"' | grep '\.apk"' | grep -v 'fdroid' | head -1 | sed 's/.*"browser_download_url": *"\([^"]*\)".*/\1/')
+
+  if [[ -z "$apk_url" ]]; then
+    echo "error: could not find APK download URL in GitHub release" >&2
+    exit 1
+  fi
+
+  echo "Latest release: $tag"
+  echo "APK URL: $apk_url"
+
+  if (( dry_run )); then
+    echo "would download: $apk_url"
+    echo "would install to: ${devices[*]}"
+    exit 0
+  fi
+
+  TMP_DIR=$(mktemp -d)
+  apk_path="$TMP_DIR/obtainium.apk"
+  echo "Downloading APK..."
+  curl -fSL --progress-bar -o "$apk_path" "$apk_url"
+  echo "Downloaded: $apk_path ($(du -h "$apk_path" | cut -f1))"
+fi
+
+if (( dry_run )); then
+  echo "would install $apk_path to: ${devices[*]}"
+  exit 0
+fi
+
+# Install to each device
+failed=0
+for serial in "${devices[@]}"; do
+  echo
+  echo "Installing to $serial..."
+  if adb -s "$serial" install -r "$apk_path"; then
+    echo "  OK: $serial"
+  else
+    echo "  FAILED: $serial" >&2
+    failed=1
+  fi
+done
+
+echo
+if (( failed )); then
+  echo "Some installs failed. Check output above." >&2
+  exit 1
+else
+  echo "Obtainium installed successfully on all ${#devices[@]} device(s)."
+fi

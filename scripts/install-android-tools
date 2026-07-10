@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Installs ADB, Fastboot, and related Android tools needed for Mi A3 LineageOS flashing.
+# Idempotent — safe to re-run.
+
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME [--dry-run]
+
+Install ADB, Fastboot, and Android platform tools.
+Detects pacman (Arch), apt (Debian/Ubuntu), or dnf (Fedora).
+
+Options:
+  --dry-run   Print what would be installed without making changes.
+USAGE
+}
+
+dry_run=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+# Detect package manager
+if command -v pacman &>/dev/null; then
+  pm=pacman
+  install_pkg=(sudo pacman -S --needed --noconfirm android-tools)
+elif command -v apt &>/dev/null; then
+  pm=apt
+  install_pkg=(sudo apt install -y android-tools-adb android-tools-fastboot)
+elif command -v dnf &>/dev/null; then
+  pm=dnf
+  install_pkg=(sudo dnf install -y android-tools)
+else
+  echo "error: no supported package manager found (pacman/apt/dnf)" >&2
+  exit 1
+fi
+
+echo "Detected package manager: $pm"
+
+# Check if already installed
+already_installed=1
+for tool in adb fastboot; do
+  if ! command -v "$tool" &>/dev/null; then
+    already_installed=0
+    break
+  fi
+done
+
+if (( already_installed )); then
+  echo "adb and fastboot already installed:"
+  echo "  adb     -> $(command -v adb) ($(adb --version | head -1))"
+  echo "  fastboot -> $(command -v fastboot) ($(fastboot --version | head -1))"
+  exit 0
+fi
+
+if (( dry_run )); then
+  echo "would run: ${install_pkg[*]}"
+  exit 0
+fi
+
+echo "Installing Android tools..."
+"${install_pkg[@]}"
+
+# udev rules for Arch (lets you use ADB without sudo)
+if [[ "$pm" == "pacman" ]]; then
+  if ! command -v udevadm &>/dev/null; then
+    echo "warning: udevadm not found, skipping udev rule setup" >&2
+  else
+    echo "Reloading udev rules..."
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    echo "Add yourself to the 'adbusers' group so you don't need sudo:"
+    echo "  sudo usermod -aG adbusers \$USER"
+    echo "  (then log out and back in)"
+  fi
+fi
+
+echo
+echo "Installed:"
+echo "  adb     -> $(command -v adb) ($(adb --version | head -1))"
+echo "  fastboot -> $(command -v fastboot) ($(fastboot --version | head -1))"
+echo
+echo "Next: connect your phone and run 'adb devices' to verify."
