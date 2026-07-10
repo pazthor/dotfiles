@@ -8,3 +8,6 @@
 
 # Beads local Dolt state (runtime, versioned by Dolt, not git)
 .beads/
+
+# Machine-local Hyprland monitor overrides (examples/defaults are tracked)
+config/.config/hypr/monitors-local.conf

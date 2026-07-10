@@ -65,8 +65,20 @@ while IFS= read -r repo_rel; do
   fi
 done < <(git -C "$repo_root" ls-files -- 'config/' | grep -v '__pycache__')
 
+monitors_local="$HOME/.config/hypr/monitors-local.conf"
+monitors_default="$repo_root/config/.config/hypr/monitors-local.default.conf"
+
 if (( dry_run )); then
+  if [[ ! -e "$monitors_local" ]]; then
+    echo "would create: $monitors_local from $monitors_default"
+  fi
   exit 0
+fi
+
+if [[ ! -e "$monitors_local" ]]; then
+  mkdir -p -- "$(dirname -- "$monitors_local")"
+  cp -- "$monitors_default" "$monitors_local"
+  echo "Created local monitor overrides: $monitors_local"
 fi
 
 echo
