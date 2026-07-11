@@ -1,0 +1,39 @@
+# Globs matched against $HOME-relative paths by scripts/drift.
+# One pattern per line; lines starting with # are comments.
+
+# Secrets & machine state — never adopt these into a git repo
+.bash_history
+.pulse-cookie
+.claude.json
+.claude.json.backup
+.pi/agent/auth.json
+.pi/agent/trust.json
+.pi/agent/models.json
+
+# Machine-generated desktop entries and caches
+.local/share/applications/*
+
+# Installer-managed shims in ~/.local/bin (recreated by their installers)
+.local/bin/codex
+.local/bin/copilot
+.local/bin/gemini
+.local/bin/opencode
+.local/bin/pi
+.local/bin/playwright-cli
+.local/bin/uv
+.local/bin/uvx
+.local/bin/env
+.local/bin/env.fish
+
+# Per-machine hypr monitor overrides: tracked in repo but intentionally
+# copied (not linked) by scripts/bootstrap
+.config/hypr/monitors-local.*
+
+# LazyVim starter boilerplate — intentionally not adopted
+.config/nvim/LICENSE
+.config/nvim/README.md
+.config/nvim/.gitignore
+.config/nvim/lua/plugins/example.lua
+
+# Omarchy sample hooks shipped by omarchy itself
+.config/omarchy/hooks/*.sample

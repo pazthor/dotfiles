@@ -19,6 +19,7 @@ All scripts live in `scripts/` and are executable:
 | `scripts/adopt-verify [path]` | Print canonical `config/… → $HOME/…` path mappings (no changes) |
 | `scripts/link-config <path>` | Link a single already-tracked repo file back to its home location |
 | `scripts/bootstrap [--dry-run\|--force]` | Link **every** tracked `config/` file into `$HOME` (idempotent) |
+| `scripts/drift [--quiet]` | Report unadopted files, broken links, and leftover `.bak.*` in managed dirs (respects `.driftignore`) |
 | `scripts/status` | Quick `git status` for the repo |
 | `scripts/help` | Print tutorial + README |
 

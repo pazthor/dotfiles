@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME [--quiet]
+
+Detect drift between the repo and \$HOME in directories the repo already manages.
+
+For every \$HOME directory that contains at least one adopted file, report:
+  candidate:  regular file not yet adopted into the repo (run adopt-config)
+  not linked: tracked repo file whose home path is not a symlink to it (run link-config)
+  leftover:   *.bak.* backup created by adopt-config (verify, then delete)
+
+Paths matching a glob in .driftignore (one per line, relative to \$HOME) are
+skipped. Use it for secrets, machine-generated files, and intentional exceptions.
+
+Options:
+  --quiet   Suppress the "clean" summary; only print findings.
+
+Exit status: 0 when clean, 1 when drift is found.
+USAGE
+}
+
+quiet=0
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --quiet)   quiet=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+findings=0
+
+ignore_patterns=()
+if [[ -f "$repo_root/.driftignore" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    ignore_patterns+=("$line")
+  done < "$repo_root/.driftignore"
+fi
+
+# Match a $HOME-relative path against .driftignore globs.
+ignored() {
+  local rel=$1 pattern
+  for pattern in "${ignore_patterns[@]}"; do
+    # shellcheck disable=SC2053  # unquoted on purpose: glob match
+    if [[ "$rel" == $pattern ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+declare -A managed_dirs=()
+declare -A tracked=()
+
+# Collect tracked files and the home directories they live in.
+while IFS= read -r repo_rel; do
+  home_path="$HOME/${repo_rel#config/}"
+  tracked["$home_path"]=1
+  managed_dirs["$(dirname -- "$home_path")"]=1
+done < <(git -C "$repo_root" ls-files -- 'config/' | grep -v '__pycache__')
+
+# Tracked repo files whose home path is not a symlink into the repo.
+for home_path in "${!tracked[@]}"; do
+  repo_path="$repo_root/config/${home_path#"$HOME/"}"
+
+  if ignored "${home_path#"$HOME/"}"; then
+    continue
+  fi
+
+  # Repo-tracked symlinks (e.g. links into omarchy) are stored as-is; skip them.
+  if [[ -L "$repo_path" ]]; then
+    continue
+  fi
+
+  if [[ -L "$home_path" && "$(readlink -f -- "$home_path")" == "$(readlink -f -- "$repo_path")" ]]; then
+    continue
+  fi
+  echo "not linked: $home_path (run: scripts/link-config \"$home_path\")"
+  findings=1
+done
+
+# Unadopted regular files sitting next to adopted ones.
+for dir in "${!managed_dirs[@]}"; do
+  [[ -d "$dir" ]] || continue
+
+  while IFS= read -r entry; do
+    if ignored "${entry#"$HOME/"}"; then
+      continue
+    fi
+
+    # Leftover adopt-config backups get their own category.
+    if [[ "$entry" == *.bak.* ]]; then
+      echo "leftover:   $entry (verify, then delete)"
+      findings=1
+      continue
+    fi
+
+    if [[ -z "${tracked[$entry]+x}" ]]; then
+      echo "candidate:  $entry (run: scripts/adopt-config \"$entry\")"
+      findings=1
+    fi
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -type f | sort)
+done
+
+if (( findings == 0 )); then
+  (( quiet )) || echo "No drift: every managed directory is fully adopted and linked."
+  exit 0
+fi
+
+exit 1
