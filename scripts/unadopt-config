@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+readonly PACKAGE_ROOTS=(
+  "config:$HOME"
+)
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME /path/to/home/file
+
+Removes a file from the dotfiles repo and restores it as a plain file at its
+original home location. The symlink is replaced with a real copy of the file.
+
+Examples:
+  $SCRIPT_NAME ~/.config/nvim/lua/plugins/logs.lua
+  $SCRIPT_NAME ~/.config/hypr/bindings.conf
+USAGE
+}
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+repo_root=$(cd -- "$script_dir/.." && pwd)
+
+normalize_path() {
+  local raw=$1
+  raw=${raw/#\~/$HOME}
+  readlink -f -- "$raw"
+}
+
+resolve_repo_path() {
+  local source_path=$1
+  local -a candidates=()
+  local entry pkg_root fs_root rel
+
+  for entry in "${PACKAGE_ROOTS[@]}"; do
+    pkg_root=${entry%%:*}
+    fs_root=${entry#*:}
+
+    if [[ "$source_path" == "$fs_root"/* ]]; then
+      rel=${source_path#"$fs_root/"}
+      candidates+=("$pkg_root/$rel")
+    fi
+  done
+
+  if (( ${#candidates[@]} == 0 )); then
+    echo "Error: unsupported path: $source_path" >&2
+    echo "Action: only files under declared package roots are supported:" >&2
+    printf '  - %s\n' "${PACKAGE_ROOTS[@]}" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${candidates[0]}"
+}
+
+case ${1:-} in
+  -h|--help)
+    usage
+    exit 0
+    ;;
+esac
+
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 1
+fi
+
+input_path=${1/#\~/$HOME}
+
+if [[ ! -L "$input_path" ]]; then
+  if [[ ! -e "$input_path" ]]; then
+    echo "Error: file not found: $input_path" >&2
+  else
+    echo "Error: not a symlink: $input_path" >&2
+    echo "Action: only files already adopted (symlinked into the repo) can be unadopted." >&2
+  fi
+  exit 1
+fi
+
+source_path=$(normalize_path "$input_path")
+repo_relative=$(resolve_repo_path "$source_path")
+repo_path="$repo_root/$repo_relative"
+
+if [[ ! -f "$repo_path" ]]; then
+  echo "Error: file not found in repo: $repo_path" >&2
+  echo "Action: the symlink target is not tracked in this dotfiles repo." >&2
+  exit 1
+fi
+
+# Replace symlink with a real copy of the file
+cp -- "$repo_path" "${input_path}.tmp"
+rm -- "$input_path"
+mv -- "${input_path}.tmp" "$input_path"
+
+git -C "$repo_root" rm "$repo_path"
+
+echo "Unadopted: $input_path"
+echo "Removed:   $repo_path"
+echo "Run 'git commit' to record the removal."
