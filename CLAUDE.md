@@ -15,6 +15,7 @@ All scripts live in `scripts/` and are executable:
 | Script | Purpose |
 |---|---|
 | `scripts/adopt-config <path>` | Import an existing file: copies it into repo, replaces original with symlink, stages it |
+| `scripts/unadopt-config <path>` | Remove a symlinked file from the repo, restoring it as a plain file in `$HOME` |
 | `scripts/adopt <path>` | Alias for `adopt-config` |
 | `scripts/adopt-verify [path]` | Print canonical `config/… → $HOME/…` path mappings (no changes) |
 | `scripts/link-config <path>` | Link a single already-tracked repo file back to its home location |
@@ -37,6 +38,7 @@ them. `config/` is the single tree and mirrors the home layout under
 `config/.config/...`, `config/.local/...`, `config/bin/...`, etc.
 
 - Adopt a new file: `scripts/adopt-config ~/.config/hypr/foo.conf`
+- Remove a file from the repo: `scripts/unadopt-config ~/.config/hypr/foo.conf`
 - Re-link one existing tracked file: `scripts/link-config ~/.config/hypr/foo.conf`
 - Re-link everything (new machine or after a pull): `scripts/bootstrap`
 
