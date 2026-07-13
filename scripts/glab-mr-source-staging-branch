@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+
+usage() {
+  cat >&2 <<USAGE
+Usage:
+  $SCRIPT_NAME
+
+Create a GitLab MR from the current branch targeting 'staging'.
+Fills title and description from the branch's commit history (--fill).
+
+Options:
+  -h, --help    Show this help message
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -h|--help) usage; exit 0 ;;
+    -*) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
+    *) echo "Error: unexpected argument: $1" >&2; usage; exit 1 ;;
+  esac
+done
+
+if ! command -v glab &>/dev/null; then
+  echo "Error: glab not found — install it first." >&2
+  exit 1
+fi
+
+branch=$(git branch --show-current)
+if [[ -z "$branch" ]]; then
+  echo "Error: not on a named branch (detached HEAD?)" >&2
+  exit 1
+fi
+
+glab mr create \
+  --source-branch "$branch" \
+  --target-branch staging \
+  --fill
