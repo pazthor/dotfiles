@@ -65,21 +65,25 @@ while IFS= read -r repo_rel; do
   fi
 done < <(git -C "$repo_root" ls-files -- 'config/' | grep -v '__pycache__')
 
+machine=$(hostname -s)
 monitors_local="$HOME/.config/hypr/monitors-local.conf"
-monitors_default="$repo_root/config/.config/hypr/monitors-local.default.conf"
+machine_monitors="$repo_root/config/.config/hypr/monitors-local.$machine.conf"
+default_monitors="$repo_root/config/.config/hypr/monitors-local.default.conf"
+
+if [[ -f "$machine_monitors" ]]; then
+  monitors_source="$machine_monitors"
+else
+  monitors_source="$default_monitors"
+fi
 
 if (( dry_run )); then
-  if [[ ! -e "$monitors_local" ]]; then
-    echo "would create: $monitors_local from $monitors_default"
-  fi
+  echo "would link: $monitors_local -> $monitors_source"
   exit 0
 fi
 
-if [[ ! -e "$monitors_local" ]]; then
-  mkdir -p -- "$(dirname -- "$monitors_local")"
-  cp -- "$monitors_default" "$monitors_local"
-  echo "Created local monitor overrides: $monitors_local"
-fi
+mkdir -p -- "$(dirname -- "$monitors_local")"
+ln -sf "$monitors_source" "$monitors_local"
+echo "Linked monitor overrides: $monitors_local -> $monitors_source"
 
 echo
 echo "Bootstrap complete: linked=$linked skipped=$skipped failed=$failed"

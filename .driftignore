@@ -25,10 +25,6 @@
 .local/bin/env
 .local/bin/env.fish
 
-# Per-machine hypr monitor overrides: tracked in repo but intentionally
-# copied (not linked) by scripts/bootstrap
-.config/hypr/monitors-local.*
-
 # LazyVim starter boilerplate — intentionally not adopted
 .config/nvim/LICENSE
 .config/nvim/README.md
