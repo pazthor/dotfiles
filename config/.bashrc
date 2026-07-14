@@ -16,7 +16,8 @@ source ~/.local/share/omarchy/default/bash/rc
 # Set a custom prompt with the directory revealed (alternatively use https://starship.rs)
 # PS1="\W \[\e]0;\w\a\]$PS1"
 CARGO="$HOME/.cargo/bin"
-export PATH="$HOME/.config/composer/vendor/bin:$PATH:$HOME/Code/dotfiles-omarchy/bin/:$CARGO"
+export DOTFILES_PATH="$HOME/Code/dotfiles"
+export PATH="$DOTFILES_PATH/bin:$HOME/.config/composer/vendor/bin:$PATH:$HOME/Code/dotfiles-omarchy/bin/:$CARGO"
 source ~/.config/op/plugins.sh
 export CURSOR_AGENT_PATH=/usr/bin/cursor-agent
 

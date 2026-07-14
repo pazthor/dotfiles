@@ -1,7 +1,7 @@
 # Getting Started
 
 This guide covers installing the dotfiles on a new machine and daily usage via
-`just` recipes and scripts.
+`dot` commands and `just` recipes.
 
 The repo uses **one** mechanism: absolute symlinks from `$HOME` into `config/`.
 There is no Stow or chezmoi step.
@@ -14,14 +14,15 @@ There is no Stow or chezmoi step.
 
 ```bash
 # Arch Linux
-sudo pacman -S git just
+sudo pacman -S git just fzf
 
 # Debian/Ubuntu
-sudo apt install git
+sudo apt install git fzf
 curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to ~/.local/bin
 ```
 
 `just` is optional — every recipe is a thin wrapper over a script in `scripts/`.
+`fzf` is needed for the interactive `dot` picker.
 
 ### 2. Clone the repo
 
@@ -30,21 +31,60 @@ git clone git@github.com:pazthor/dotfiles.git ~/Code/dotfiles
 cd ~/Code/dotfiles
 ```
 
-### 3. Link everything into `$HOME`
+### 3. Install dot and link configs
 
 ```bash
-just bootstrap
+just install-dot
 # or, without just:
-scripts/bootstrap
+scripts/install/dot
 ```
 
-This walks every file under `config/` and symlinks it into your home directory.
-It is idempotent, so it is safe to re-run. Preview first with
-`scripts/bootstrap --dry-run`; use `--force` to overwrite differing home files.
+This will:
+- Clone [dotly](https://github.com/gtrabanco/dotly) to `~/Code/dotly` if not already there
+- Symlink every file under `config/` into your home directory (idempotent)
 
-That's it — your config files are now linked.
+### 4. Activate in your current shell
+
+```bash
+source ~/.bashrc
+```
+
+That's it — `dot` is now available.
+
+```bash
+dot                  # FZF picker over all scripts
+dot config           # pick a config script
+dot config drift     # check for unadopted files
+```
 
 For the pi coding agent (install, auth, skills), see [pi-setup.md](pi-setup.md).
+
+---
+
+## Daily usage with `dot`
+
+`dot` is the main script dispatcher. All scripts in `scripts/<context>/<name>` are
+reachable as `dot <context> <name>`.
+
+```bash
+dot                                          # FZF picker: all scripts
+dot config                                   # FZF picker: config context only
+dot config adopt ~/.config/hypr/bindings.conf
+dot config adopt-verify
+dot config drift
+dot config bootstrap
+dot config status
+dot git glab-mr
+dot install inshellisense
+dot system build-split-monitor-workspaces
+```
+
+Use `-h` on any script for help:
+
+```bash
+dot config adopt -h
+dot config drift -h
+```
 
 ---
 
@@ -62,6 +102,8 @@ When you edit a config file and want to start tracking it:
 
 ```bash
 just adopt ~/.config/hypr/bindings.conf
+# or:
+dot config adopt ~/.config/hypr/bindings.conf
 ```
 
 This copies the file into the repo under `config/`, replaces the original with a
@@ -90,6 +132,7 @@ just sync        # links newly added files and repairs missing links
 
 | Recipe | What it does |
 |---|---|
+| `just install-dot` | Clone dotly + bootstrap (run once on new machines) |
 | `just bootstrap [--force]` | Link or refresh repo-backed symlinks in `$HOME` |
 | `just sync [--force]` | Alias for `just bootstrap`; useful after `git pull` |
 | `just update` | `git pull --rebase`, then re-link new/missing configs |
@@ -154,4 +197,8 @@ counts are the ones to investigate.
 difference, then re-run with `--force` once you're sure the repo copy should win.
 
 **A config file I edited isn't tracked yet**
-Adopt it first with `scripts/adopt-config <path>`, then commit.
+Adopt it first with `dot config adopt <path>`, then commit.
+
+**`dot` command not found after bootstrap**
+Run `source ~/.bashrc`. The env vars (`DOTLY_PATH`, `DOTFILES_PATH`) are set
+there and `$DOTLY_PATH/bin` is added to `PATH`.

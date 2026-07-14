@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Self-discovery: find DOTFILES_PATH from this script's own location.
+# Works whether called directly or via a symlink anywhere in PATH.
+_self="${BASH_SOURCE[0]}"
+while [[ -L "$_self" ]]; do _self="$(readlink -- "$_self")"; done
+export DOTFILES_PATH="${DOTFILES_PATH:-$(cd -- "$(dirname -- "$_self")/.." && pwd)}"
+
+# List all executable scripts at exactly depth 2, skipping _* (library files)
+_list() {
+  find "$DOTFILES_PATH/scripts" \
+    -mindepth 2 -maxdepth 2 -perm /+111 -type f ! -name "_*" 2>/dev/null | sort
+}
+
+# Print ##? comment lines as help text — no docpars required
+# Returns 0 even when no ##? lines exist (grep exits 1 on no match)
+_help() { grep "^##?" "$1" 2>/dev/null | cut -c 5- || true; }
+
+# Resolve the absolute path to a script
+_resolve() { echo "$DOTFILES_PATH/scripts/$1/$2"; }
+
+# FZF interactive picker over a newline-separated list of absolute script paths
+_pick() {
+  local script args
+  script="$(
+    printf '%s\n' "$1" |
+      xargs -I% sh -c 'printf "%s %s\n" "$(basename $(dirname %))" "$(basename %)"' |
+      fzf --height 100% \
+          --preview '"$DOTFILES_PATH/bin/dot" $(echo {} | cut -d" " -f1) $(echo {} | cut -d" " -f2) -h'
+  )" || return 1
+  read -r -p "> " args || true
+  # shellcheck disable=SC2086
+  "$DOTFILES_PATH/bin/dot" $script ${args:-}
+}
+
+case "${1:-}" in
+  "")        _pick "$(_list)" ;;
+  -h|--help) _help "${BASH_SOURCE[0]}" ;;
+  *)
+    if [[ $# -eq 1 ]]; then
+      _pick "$(_list | grep "/${1}/")"
+      exit
+    fi
+    context="$1" script="$2"; shift 2
+    target="$(_resolve "$context" "$script")"
+    [[ ! -x "$target" ]] && { echo "Error: $context/$script not found" >&2; exit 1; }
+    [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
+    "$target" "$@"
+    ;;
+esac

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Sets up the dot command on a new machine.
+# Run this once after cloning dotfiles for the first time.
+# Idempotent — safe to re-run.
+
+set -euo pipefail
+
+DOTFILES_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+step() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
+
+step "Linking config files into \$HOME"
+"$DOTFILES_PATH/scripts/config/bootstrap"
+
+step "Done"
+cat <<MSG
+
+dot is ready. Activate it in your current shell:
+
+  source ~/.bashrc
+
+Then use it:
+
+  dot                  # FZF picker over all scripts
+  dot config           # FZF picker scoped to config context
+  dot config adopt ~/.config/hypr/bindings.conf
+  dot config drift
+
+MSG

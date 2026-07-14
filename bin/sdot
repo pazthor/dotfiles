@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+source "$HOME/Code/dotfiles/config/.bashrc"
+
+##? dot, but without environment variables pre-loaded
+##?
+##? Same usage as dot
+
+"$HOME/Code/dotfiles/bin/dot" "$@"
