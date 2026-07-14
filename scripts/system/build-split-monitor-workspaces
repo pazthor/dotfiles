@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Builds split-monitor-workspaces for the currently running Hyprland version.
-# Run this after a Hyprland update or on a new machine.
-# Output: ~/.config/hypr/plugins/split-monitor-workspaces.so
+##? Usage:
+##?   build-split-monitor-workspaces
+##?
+##? Build the split-monitor-workspaces Hyprland plugin for the running version.
+##? Run after a Hyprland update or on a new machine.
+##? Output: ~/.config/hypr/plugins/split-monitor-workspaces.so
 
 set -euo pipefail
 

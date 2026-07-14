@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Sets up the dot command on a new machine.
-# Run this once after cloning dotfiles for the first time.
-# Idempotent — safe to re-run.
-
 set -euo pipefail
+
+##? Usage:
+##?   dot
+##?
+##? Set up the dot command on a new machine.
+##? Links config/ files into $HOME via bootstrap. Run once after cloning.
+##? Idempotent — safe to re-run.
 
 DOTFILES_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 

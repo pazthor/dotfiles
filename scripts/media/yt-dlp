@@ -1,6 +1,21 @@
-yt-dlp -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" -o "%(title)s.%(ext)s"
-yt-dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" --merge-output-format mp4 https://youtube.com/shorts/a6PL8pVn24Q?si=Cqiyj0nULXXgGMMn
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Download and convert for WhatsApp in one step
-yt-dlp-whatsapp https://youtu.be/VIDEO_ID
-yt-dlp-whatsapp --max-size 12 --output ~/Desktop/clip-whatsapp.mp4 https://youtube.com/shorts/VIDEO_ID
+##? Usage:
+##?   yt-dlp <url> [yt-dlp-options...]
+##?   yt-dlp -h | --help
+##?
+##? Download a video in best mp4 quality.
+##? Wrapper around yt-dlp with preferred format options.
+##?
+##? Examples:
+##?   yt-dlp https://youtu.be/VIDEO_ID
+##?   yt-dlp https://youtube.com/shorts/VIDEO_ID
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then
+  grep "^##?" "${BASH_SOURCE[0]}" | cut -c 5-
+  exit 0
+fi
+
+yt-dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" --merge-output-format mp4 \
+  -o "%(title)s.%(ext)s" "$@"

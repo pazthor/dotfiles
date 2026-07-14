@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Installs the pi coding agent CLI + extensions under the current @earendil-works scope.
-# Run on a new machine, or to repair a "Cannot find module '@earendil-works/pi-coding-agent'"
-# extension-load error caused by the old deprecated @mariozechner/* packages shadowing pi.
-# Idempotent.
+##? Usage:
+##?   pi
+##?
+##? Install the pi coding agent CLI and extensions (@earendil-works scope).
+##? Run on a new machine or to repair broken module resolution. Idempotent.
 
 set -euo pipefail
 

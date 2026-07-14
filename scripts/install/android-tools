@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Installs ADB, Fastboot, and related Android tools needed for Mi A3 LineageOS flashing.
-# Idempotent — safe to re-run.
-
 set -euo pipefail
+
+##? Usage:
+##?   android-tools [--dry-run]
+##?
+##? Install ADB, Fastboot, and Android platform tools. Idempotent.
+##? Detects pacman (Arch), apt (Debian/Ubuntu), or dnf (Fedora).
+##?
+##? Options:
+##?   --dry-run   Print what would be installed without making changes.
 
 SCRIPT_NAME=$(basename "$0")
 

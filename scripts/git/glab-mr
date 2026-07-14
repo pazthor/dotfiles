@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   glab-mr
+##?   glab-mr -h | --help
+##?
+##? Create a GitLab MR from the current branch targeting 'staging'.
+##? Title and description are filled from the branch's commit history.
+
 SCRIPT_NAME=$(basename "$0")
 
 usage() {

@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# Install/update InShellisense using mise when available.
-# Idempotent: safe to run on new machines or after pulling dotfiles.
-
 set -euo pipefail
+
+##? Usage:
+##?   inshellisense
+##?
+##? Install or update InShellisense shell completions.
+##? Uses mise if available, falls back to npm. Idempotent.
 
 package="npm:@microsoft/inshellisense@latest"
 

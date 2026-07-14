@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   unadopt <path>
+##?
+##? Remove a file from the repo and restore it as a plain file in $HOME.
+##? The symlink is replaced with a real copy. Run 'git commit' after.
+##?
+##? Examples:
+##?   unadopt ~/.config/nvim/lua/plugins/logs.lua
+##?   unadopt ~/.config/hypr/bindings.conf
+
 SCRIPT_NAME=$(basename "$0")
 
 readonly PACKAGE_ROOTS=(
@@ -22,7 +32,7 @@ USAGE
 }
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 normalize_path() {
   local raw=$1

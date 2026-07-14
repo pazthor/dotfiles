@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   adopt-verify [<path>]
+##?
+##? Show canonical config/ -> $HOME mappings.
+##? With a path, preview where that file would land in the repo.
+##?
+##? Examples:
+##?   adopt-verify
+##?   adopt-verify ~/.config/hypr/bindings.conf
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-"$script_dir/adopt-config" --verify "$@"
+"$script_dir/adopt" --verify "$@"

@@ -1,6 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   adopt <path>
+##?   adopt --verify [<path>]
+##?   adopt -h | --help
+##?
+##? Copy a home file into the repo, replace it with a symlink, and stage it.
+##?
+##? Options:
+##?   --verify   Print canonical mapping samples without importing.
+##?   -h         Show this help.
+##?
+##? Examples:
+##?   adopt ~/.config/hypr/bindings.conf
+##?   adopt --verify
+##?   adopt --verify ~/bin/my-helper
+
 SCRIPT_NAME=$(basename "$0")
 
 # Canonical package roots for import destinations.
@@ -26,7 +42,7 @@ USAGE
 }
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 normalize_path() {
   local raw=$1

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Unlocks the bootloader on a Xiaomi Mi A3 (Android One, codename: laurel_sprout).
-# WARNING: This WIPES all data on the device. Back up first.
-# NOT for MIUI devices — does not use Mi Unlock Tool.
+##? Usage:
+##?   unlock-bootloader [--skip-confirm]
+##?
+##? Unlock the bootloader on a Xiaomi Mi A3 (Android One, laurel_sprout).
+##? WARNING: Wipes all data. Back up before running.
+##? NOT for MIUI — does not use Mi Unlock Tool.
+##?
+##? Options:
+##?   --skip-confirm   Skip the interactive confirmation prompt.
 
 set -euo pipefail
 

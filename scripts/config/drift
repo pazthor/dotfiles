@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   drift [--quiet]
+##?
+##? Detect drift between the repo and $HOME in managed directories.
+##? Reports: candidate (not adopted), not linked, leftover backups.
+##? Exit 0 when clean, 1 when drift is found.
+##?
+##? Options:
+##?   --quiet   Suppress the "clean" summary; only print findings.
+
 SCRIPT_NAME=$(basename "$0")
 
 usage() {
@@ -36,7 +46,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 findings=0
 
@@ -86,7 +96,7 @@ for home_path in "${!tracked[@]}"; do
   if [[ -L "$home_path" && "$(readlink -f -- "$home_path")" == "$(readlink -f -- "$repo_path")" ]]; then
     continue
   fi
-  echo "not linked: $home_path (run: scripts/link-config \"$home_path\")"
+  echo "not linked: $home_path (run: dot config link-config \"$home_path\")"
   findings=1
 done
 
@@ -107,7 +117,7 @@ for dir in "${!managed_dirs[@]}"; do
     fi
 
     if [[ -z "${tracked[$entry]+x}" ]]; then
-      echo "candidate:  $entry (run: scripts/adopt-config \"$entry\")"
+      echo "candidate:  $entry (run: dot config adopt \"$entry\")"
       findings=1
     fi
   done < <(find "$dir" -mindepth 1 -maxdepth 1 -type f | sort)

@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   help
+##?
+##? Print the dotfiles quick-start summary and the full README.
+
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 readme="$repo_root/README.md"
 
@@ -15,9 +20,9 @@ cat <<'SUMMARY'
 Dotfiles helper (Omarchy overrides)
 
 Quick summary:
-1) Preview mappings: ~/Code/dotfiles/scripts/adopt-verify
+1) Preview mappings: dot config adopt-verify
 2) Edit your real config file (e.g., ~/.config/hypr/bindings.conf)
-3) Adopt it: ~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
+3) Adopt it: dot config adopt ~/.config/hypr/bindings.conf
 4) Commit changes: git -C ~/Code/dotfiles status && git -C ~/Code/dotfiles commit -m "message"
 
 Full tutorial below:

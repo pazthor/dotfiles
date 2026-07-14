@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-# Downloads the latest Obtainium APK from GitHub and installs it to all connected ADB devices.
-# Idempotent — safe to re-run; will upgrade if already installed.
-
 set -euo pipefail
+
+##? Usage:
+##?   obtainium [--dry-run] [--apk <path>]
+##?
+##? Download the latest Obtainium APK from GitHub and install via ADB
+##? to every connected Android device. Idempotent.
+##?
+##? Options:
+##?   --apk <path>   Use a local APK instead of downloading from GitHub.
+##?   --dry-run      Print what would be done without installing.
 
 SCRIPT_NAME=$(basename "$0")
 GITHUB_REPO="ImranR98/Obtainium"

@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   link-config <path>
+##?   link-config --force <path>
+##?
+##? Re-link a single repo-tracked file to its home location as a symlink.
+##? The file must already be adopted (exist under config/ in the repo).
+##?
+##? Options:
+##?   --force   Skip confirmation when home file differs from repo file.
+##?
+##? Examples:
+##?   link-config ~/.config/hypr/input.conf
+##?   link-config --force ~/.config/hypr/input.conf
+
 SCRIPT_NAME=$(basename "$0")
 
 readonly PACKAGE_ROOTS=(
@@ -26,7 +40,7 @@ USAGE
 }
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 normalize_path() {
   local raw=$1
@@ -81,7 +95,7 @@ repo_path="$repo_root/$repo_relative"
 
 if [[ ! -f "$repo_path" ]]; then
   echo "Error: file not tracked in repo: $repo_path" >&2
-  echo "Action: use adopt-config first to import it." >&2
+  echo "Action: use 'dot config adopt' first to import it." >&2
   exit 1
 fi
 

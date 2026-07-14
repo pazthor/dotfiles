@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+##? Usage:
+##?   bootstrap [--dry-run] [--force]
+##?
+##? Link all repo-tracked config files to their home locations. Idempotent.
+##?
+##? Options:
+##?   --dry-run   Print what would be linked without making changes.
+##?   --force     Skip confirmation prompts when files differ.
+
 SCRIPT_NAME=$(basename "$0")
 
 usage() {
@@ -18,7 +27,7 @@ USAGE
 }
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/.." && pwd)
+repo_root=$(cd -- "$script_dir/../.." && pwd)
 
 dry_run=0
 force=0
