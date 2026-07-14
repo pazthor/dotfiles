@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This repo tracks personal config file overrides for an [Omarchy](https://omarchy.org)-based Linux desktop. Only files you personally modify live here — Omarchy-managed files stay in `~/.local/share/omarchy/` and must not be edited directly.
 
-The repo mirrors the home directory structure so symlinks are straightforward: `~/Code/dotfiles/.config/hypr/foo.conf` → `~/.config/hypr/foo.conf`.
+The repo mirrors the home directory structure: `~/Code/dotfiles/config/.config/hypr/foo.conf` → `~/.config/hypr/foo.conf`.
 
 ## Key Scripts
 
@@ -45,20 +45,65 @@ them. `config/` is the single tree and mirrors the home layout under
 - Re-link one existing tracked file: `scripts/link-config ~/.config/hypr/foo.conf`
 - Re-link everything (new machine or after a pull): `scripts/bootstrap`
 
-## Bootstrapping on a New Machine
+## Just recipes
+
+```bash
+just bootstrap          # link every tracked config into $HOME (idempotent)
+just sync               # same as bootstrap; run after git pull
+just update             # git pull --rebase, then re-link new/missing configs
+just adopt ~/.config/hypr/bindings.conf   # adopt a single file
+just verify ~/.config/hypr/bindings.conf  # preview path mapping without changes
+```
+
+Run `just` with no arguments to see all recipes.
+
+## Validation
+
+Run these to check changes are correct before committing:
+
+```bash
+bash -n scripts/*               # syntax-check all shell scripts
+just --list                     # confirm Justfile parses cleanly
+./scripts/bootstrap --dry-run   # preview what bootstrap would link
+./scripts/drift                 # detect unadopted files or broken symlinks
+```
+
+## Machine-specific monitor overrides
+
+`scripts/bootstrap` has special logic for monitor config: it symlinks
+`~/.config/hypr/monitors-local.conf` to a machine-specific file selected by hostname:
+
+- `config/.config/hypr/monitors-local.<hostname>.conf` — used if present
+- `config/.config/hypr/monitors-local.default.conf` — fallback
+
+To add a monitor layout for a new machine, copy `monitors-local.default.conf` to
+`monitors-local.<hostname>.conf` and edit it (no adoption needed — it lives in the repo already).
+
+## Environment variables
+
+`.env.default` is a template for variables consumed by some configs (e.g. Neovim SSH log filtering). Copy it and fill in values:
+
+```bash
+cp .env.default ~/.env.dotfiles
+# then source it from ~/.bashrc
+```
+
+## Bootstrapping on a new machine
 
 ```bash
 git clone <repo> ~/Code/dotfiles
 ~/Code/dotfiles/scripts/bootstrap
 ```
 
-## makefile / Justfile
-
-No build system is used; scripts are plain bash. The `makefile` and `Justfile`
-are thin wrappers over `scripts/` (`bootstrap`, `adopt-config`, `adopt-verify`).
-`make adot-config` is a deprecated alias that forwards to `adopt-config`.
-
 ## What NOT to edit
 
 - `~/.local/share/omarchy/` — managed by Omarchy updates, changes will be overwritten
 - Files not yet adopted — edit first, then adopt with `adopt-config`
+
+## Session completion
+
+Work is not done until `git push` succeeds. Always push committed changes:
+
+```bash
+git pull --rebase && git push
+```
