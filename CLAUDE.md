@@ -10,7 +10,10 @@ The repo mirrors the home directory structure so symlinks are straightforward: `
 
 ## Key Scripts
 
-All scripts live in `scripts/` and are executable:
+All scripts live in `scripts/` and are executable. The `dot` command
+(`config/.local/bin/dot`, symlinked to `~/.local/bin/dot` by bootstrap) runs any
+of them from anywhere: `dot drift`, `dot adopt-config <path>`, etc. Running
+`dot` with no arguments lists all subcommands.
 
 | Script | Purpose |
 |---|---|

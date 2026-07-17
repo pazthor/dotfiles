@@ -101,7 +101,16 @@ just sync        # links newly added files and repairs missing links
 
 ## Daily usage with scripts
 
-All scripts live in `scripts/` and can be called directly.
+All scripts live in `scripts/` and can be called directly. Once bootstrapped,
+the `dot` command (`config/.local/bin/dot`, symlinked into `~/.local/bin`) runs
+any of them from anywhere:
+
+```bash
+dot adopt-config ~/.config/hypr/bindings.conf
+dot drift
+dot bootstrap
+dot            # list all subcommands
+```
 
 ### Adopt a file
 

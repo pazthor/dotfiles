@@ -23,6 +23,19 @@ Before importing, you can preview canonical mappings:
 ~/Code/dotfiles/scripts/adopt-verify ~/.config/hypr/bindings.conf
 ```
 
+## The `dot` command
+
+After bootstrapping, `dot` is on PATH (`~/.local/bin/dot`, tracked as
+`config/.local/bin/dot`) and runs any script in `scripts/` from anywhere:
+
+```bash
+dot adopt-config ~/.config/hypr/bindings.conf
+dot adopt-verify
+dot drift
+dot bootstrap
+dot            # list all subcommands
+```
+
 ## Quick commands (just)
 
 If you have [just](https://github.com/casey/just) installed, these recipes wrap the common workflows:
