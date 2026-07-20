@@ -10,7 +10,7 @@ export DOTFILES_PATH="${DOTFILES_PATH:-$(cd -- "$(dirname -- "$_self")/.." && pw
 # List all executable scripts at exactly depth 2, skipping _* (library files)
 _list() {
   find "$DOTFILES_PATH/scripts" \
-    -mindepth 2 -maxdepth 2 -perm /+111 -type f ! -name "_*" 2>/dev/null | sort
+    -mindepth 2 -maxdepth 2 -perm /111 -type f ! -name "_*" 2>/dev/null | sort
 }
 
 # Print ##? comment lines as help text — no docpars required
