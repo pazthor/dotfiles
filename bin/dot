@@ -25,10 +25,14 @@ _flat_matches() { _list | grep "/${1}\$"; }
 
 # FZF interactive picker over a newline-separated list of absolute script paths
 _pick() {
-  local script args
+  local path entries script args
+  entries=""
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    entries+="$(basename -- "$(dirname -- "$path")") $(basename -- "$path")"$'\n'
+  done <<<"$1"
   script="$(
-    printf '%s\n' "$1" |
-      xargs -I% sh -c 'printf "%s %s\n" "$(basename $(dirname %))" "$(basename %)"' |
+    printf '%s' "$entries" |
       fzf --height 100% \
           --preview '"$DOTFILES_PATH/bin/dot" $(echo {} | cut -d" " -f1) $(echo {} | cut -d" " -f2) -h'
   )" || return 1
