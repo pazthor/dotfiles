@@ -20,6 +20,9 @@ _help() { grep "^##?" "$1" 2>/dev/null | cut -c 5- || true; }
 # Resolve the absolute path to a script
 _resolve() { echo "$DOTFILES_PATH/scripts/$1/$2"; }
 
+# Find scripts matching a bare name across every context (flat dispatch)
+_flat_matches() { _list | grep "/${1}\$"; }
+
 # FZF interactive picker over a newline-separated list of absolute script paths
 _pick() {
   local script args
@@ -38,14 +41,30 @@ case "${1:-}" in
   "")        _pick "$(_list)" ;;
   -h|--help) _help "${BASH_SOURCE[0]}" ;;
   *)
-    if [[ $# -eq 1 ]]; then
-      _pick "$(_list | grep "/${1}/")"
-      exit
+    if [[ -d "$DOTFILES_PATH/scripts/$1" ]]; then
+      # dot <context> [script] [args...]
+      if [[ $# -eq 1 ]]; then
+        _pick "$(_list | grep "/${1}/")"
+        exit
+      fi
+      context="$1" script="$2"; shift 2
+      target="$(_resolve "$context" "$script")"
+      [[ ! -x "$target" ]] && { echo "Error: $context/$script not found" >&2; exit 1; }
+      [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
+      "$target" "$@"
+    else
+      # dot <script> [args...] — flat dispatch: find <script> in any context
+      name="$1"; shift
+      mapfile -t matches < <(_flat_matches "$name")
+      case "${#matches[@]}" in
+        0) echo "Error: no script named '$name' found" >&2; exit 1 ;;
+        1) target="${matches[0]}"
+           [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
+           "$target" "$@" ;;
+        *) echo "Error: '$name' is ambiguous, matches:" >&2
+           printf '  %s\n' "${matches[@]}" >&2
+           exit 1 ;;
+      esac
     fi
-    context="$1" script="$2"; shift 2
-    target="$(_resolve "$context" "$script")"
-    [[ ! -x "$target" ]] && { echo "Error: $context/$script not found" >&2; exit 1; }
-    [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
-    "$target" "$@"
     ;;
 esac

@@ -8,7 +8,7 @@ This repo tracks only the config files you personally modify. It keeps all chang
 2. Adopt it into this repo with the helper script:
 
 ```bash
-~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
+~/Code/dotfiles/scripts/config/adopt ~/.config/hypr/bindings.conf
 ```
 
 The script will:
@@ -19,22 +19,27 @@ The script will:
 Before importing, you can preview canonical mappings:
 
 ```bash
-~/Code/dotfiles/scripts/adopt-verify
-~/Code/dotfiles/scripts/adopt-verify ~/.config/hypr/bindings.conf
+~/Code/dotfiles/scripts/config/adopt-verify
+~/Code/dotfiles/scripts/config/adopt-verify ~/.config/hypr/bindings.conf
 ```
 
 ## The `dot` command
 
-After bootstrapping, `dot` is on PATH (`~/.local/bin/dot`, tracked as
-`config/.local/bin/dot`) and runs any script in `scripts/` from anywhere:
+After bootstrapping, `dot` is on PATH (`bin/dot`, self-discovers its repo
+root and is prepended to `$PATH` by `config/.bashrc`) and runs any script
+under `scripts/<context>/` from anywhere:
 
 ```bash
-dot adopt-config ~/.config/hypr/bindings.conf
-dot adopt-verify
-dot drift
-dot bootstrap
-dot            # list all subcommands
+dot config adopt ~/.config/hypr/bindings.conf
+dot config adopt-verify
+dot config drift
+dot config bootstrap
+dot            # fzf picker over all scripts
+dot config     # fzf picker scoped to the config context
 ```
+
+The context prefix can be dropped when the script name is unambiguous:
+`dot drift`, `dot bootstrap --dry-run`, `dot adopt-verify` all work too.
 
 ## Quick commands (just)
 
@@ -87,7 +92,7 @@ $EDITOR ~/.config/hypr/bindings.conf
 ### 2. Adopt the file into the repo
 
 ```bash
-~/Code/dotfiles/scripts/adopt-config ~/.config/hypr/bindings.conf
+~/Code/dotfiles/scripts/config/adopt ~/.config/hypr/bindings.conf
 ```
 
 This will:
@@ -126,40 +131,34 @@ mv ~/.config/hypr/bindings.conf.bak.<timestamp> ~/.config/hypr/bindings.conf
 Print the quick summary plus full tutorial:
 
 ```bash
-~/Code/dotfiles/scripts/help
+~/Code/dotfiles/scripts/config/help
 ```
 
 Print canonical mapping samples and preview a specific path:
 
 ```bash
-~/Code/dotfiles/scripts/adopt-verify
-~/Code/dotfiles/scripts/adopt-verify ~/bin/my-helper
-```
-
-Adopt a file with a shorter command:
-
-```bash
-~/Code/dotfiles/scripts/adopt ~/.config/hypr/bindings.conf
+~/Code/dotfiles/scripts/config/adopt-verify
+~/Code/dotfiles/scripts/config/adopt-verify ~/bin/my-helper
 ```
 
 Check repo status quickly:
 
 ```bash
-~/Code/dotfiles/scripts/status
+~/Code/dotfiles/scripts/config/status
 ```
 
-## Re-linking everything (`scripts/bootstrap`)
+## Re-linking everything (`scripts/config/bootstrap`)
 
-`scripts/adopt-config` imports one file at a time. To (re)create every symlink
+`scripts/config/adopt` imports one file at a time. To (re)create every symlink
 in one pass — after cloning on a new machine, or after `git pull` adds new
-tracked files — use `scripts/bootstrap`. It walks every file under `config/`
-and links it into `$HOME` via `scripts/link-config`. It is idempotent, so it is
-safe to re-run.
+tracked files — use `scripts/config/bootstrap`. It walks every file under
+`config/` and links it into `$HOME` via `scripts/config/link-config`. It is
+idempotent, so it is safe to re-run.
 
 ```bash
-~/Code/dotfiles/scripts/bootstrap --dry-run   # preview what would be linked
-~/Code/dotfiles/scripts/bootstrap             # link everything
-~/Code/dotfiles/scripts/bootstrap --force     # overwrite differing home files
+~/Code/dotfiles/scripts/config/bootstrap --dry-run   # preview what would be linked
+~/Code/dotfiles/scripts/config/bootstrap             # link everything
+~/Code/dotfiles/scripts/config/bootstrap --force     # overwrite differing home files
 ```
 
 Equivalent `just` recipes: `just bootstrap`, `just sync` (after a pull), and
@@ -169,7 +168,7 @@ Equivalent `just` recipes: `just bootstrap`, `just sync` (after a pull), and
 
 ```bash
 git clone <repo> ~/Code/dotfiles
-~/Code/dotfiles/scripts/bootstrap
+~/Code/dotfiles/scripts/config/bootstrap
 ```
 
 That single command links every tracked config into place — there are no

@@ -40,7 +40,6 @@ scripts/install/dot
 ```
 
 This will:
-- Clone [dotly](https://github.com/gtrabanco/dotly) to `~/Code/dotly` if not already there
 - Symlink every file under `config/` into your home directory (idempotent)
 
 ### 4. Activate in your current shell
@@ -132,7 +131,7 @@ just sync        # links newly added files and repairs missing links
 
 | Recipe | What it does |
 |---|---|
-| `just install-dot` | Clone dotly + bootstrap (run once on new machines) |
+| `just install-dot` | Bootstrap the repo and print activation instructions (run once on new machines) |
 | `just bootstrap [--force]` | Link or refresh repo-backed symlinks in `$HOME` |
 | `just sync [--force]` | Alias for `just bootstrap`; useful after `git pull` |
 | `just update` | `git pull --rebase`, then re-link new/missing configs |
@@ -144,44 +143,34 @@ just sync        # links newly added files and repairs missing links
 
 ## Daily usage with scripts
 
-All scripts live in `scripts/` and can be called directly. Once bootstrapped,
-the `dot` command (`config/.local/bin/dot`, symlinked into `~/.local/bin`) runs
-any of them from anywhere:
-
-```bash
-dot adopt-config ~/.config/hypr/bindings.conf
-dot drift
-dot bootstrap
-dot            # list all subcommands
-```
+All scripts live under `scripts/<context>/<name>` and are executable, so they
+can also be called directly by path instead of through `dot`:
 
 ### Adopt a file
 
 ```bash
-scripts/adopt-config ~/.config/hypr/bindings.conf
-# or the short alias:
-scripts/adopt ~/.config/hypr/bindings.conf
+scripts/config/adopt ~/.config/hypr/bindings.conf
 ```
 
 ### Verify mappings
 
 ```bash
-scripts/adopt-verify                              # print all mappings
-scripts/adopt-verify ~/.config/hypr/bindings.conf # check one path
+scripts/config/adopt-verify                              # print all mappings
+scripts/config/adopt-verify ~/.config/hypr/bindings.conf # check one path
 ```
 
 ### Link one file / link everything
 
 ```bash
-scripts/link-config ~/.config/hypr/bindings.conf  # re-link a single tracked file
-scripts/bootstrap                                 # re-link every tracked file
+scripts/config/link-config ~/.config/hypr/bindings.conf  # re-link a single tracked file
+scripts/config/bootstrap                                 # re-link every tracked file
 ```
 
 ### Repo status
 
 ```bash
-scripts/status   # git status for this repo
-scripts/help     # print the full tutorial
+scripts/config/status   # git status for this repo
+scripts/config/help     # print the full tutorial
 ```
 
 ---
@@ -200,5 +189,5 @@ difference, then re-run with `--force` once you're sure the repo copy should win
 Adopt it first with `dot config adopt <path>`, then commit.
 
 **`dot` command not found after bootstrap**
-Run `source ~/.bashrc`. The env vars (`DOTLY_PATH`, `DOTFILES_PATH`) are set
-there and `$DOTLY_PATH/bin` is added to `PATH`.
+Run `source ~/.bashrc`. `DOTFILES_PATH` is set there and `$DOTFILES_PATH/bin`
+(which contains `dot`) is prepended to `PATH`.
