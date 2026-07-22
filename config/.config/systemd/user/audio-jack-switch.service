@@ -1,0 +1,12 @@
+[Unit]
+Description=Auto-switch audio profile on headphone jack insert/remove
+After=pipewire.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+ExecStart=%h/.local/bin/audio-jack-switch
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

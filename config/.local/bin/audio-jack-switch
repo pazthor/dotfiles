@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Auto-switches audio card profile when headphone jack is inserted/removed.
+# Needed because sof-essx8336 exposes Speaker and Headphone as separate profiles,
+# and WirePlumber doesn't auto-switch between them on jack events.
+CARD="alsa_card.pci-0000_00_1f.3-platform-sof-essx8336"
+HP_PROFILE="HiFi (HDMI1, HDMI2, HDMI3, Headphones, Headset, Mic)"
+SP_PROFILE="HiFi (HDMI1, HDMI2, HDMI3, Headset, Mic, Speaker)"
+
+switch_profile() {
+    if pactl list cards 2>/dev/null | grep -A6 "\[Out\] Headphones:" | grep -q ", available)"; then
+        pactl set-card-profile "$CARD" "$HP_PROFILE" 2>/dev/null
+    else
+        pactl set-card-profile "$CARD" "$SP_PROFILE" 2>/dev/null
+    fi
+}
+
+switch_profile
+
+pactl subscribe 2>/dev/null | grep --line-buffered "card" | while read -r _; do
+    switch_profile
+done
