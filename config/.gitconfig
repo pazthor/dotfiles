@@ -13,3 +13,16 @@
 	email = hi.pazthor@gmail.com
 [core]
 	excludesfile = /home/pazthor/Code/dotfiles-omarchy/.config/git/.gitignore_global
+
+[diff]
+  tool = nvimdiff
+
+[difftool]
+  prompt = false
+
+[merge]
+  tool = nvimdiff
+
+[mergetool]
+  prompt = false
+
