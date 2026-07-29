@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Build and optionally flash ErgoDox EZ firmware from ZSA's QMK fork.
+# Layout: "linux qwerty programmer-lazyvim" (6Dvmr/QzpeLD), firmware v25.0
+#
+# Usage:
+#   ergodox-build [--flash]
+#
+#   --flash   after compiling, flash with wally-cli (requires physical keyboard)
+#
+# On first run, this script clones everything. Subsequent runs skip cloning
+# if ~/qmk_firmware already exists.
+
+set -euo pipefail
+
+FLASH=false
+for arg in "$@"; do
+  case "$arg" in
+    --flash) FLASH=true ;;
+    *) echo "Unknown argument: $arg" >&2; exit 1 ;;
+  esac
+done
+
+QMK_DIR="$HOME/qmk_firmware"
+KEYMAP_DIR="$QMK_DIR/keyboards/zsa/ergodox_ez/m32u4/glow/keymaps/custom"
+HEX="$QMK_DIR/zsa_ergodox_ez_m32u4_glow_custom.hex"
+
+# ── 1. Clone ZSA QMK fork (firmware25 branch) ────────────────────────────────
+if [[ ! -d "$QMK_DIR/.git" ]]; then
+  echo "==> Cloning ZSA qmk_firmware (firmware25)…"
+  git clone --depth 1 --branch firmware25 \
+    https://github.com/zsa/qmk_firmware.git "$QMK_DIR"
+else
+  echo "==> $QMK_DIR already exists, skipping clone"
+fi
+
+# ── 2. LUFA USB library submodule ─────────────────────────────────────────────
+if [[ ! -f "$QMK_DIR/lib/lufa/LUFA/makefile" ]]; then
+  echo "==> Initialising LUFA submodule…"
+  git -C "$QMK_DIR" submodule update --init lib/lufa
+fi
+
+# ── 3. ZSA community modules (oryx + defaults) ────────────────────────────────
+if [[ ! -d "$QMK_DIR/modules/zsa/oryx" ]]; then
+  echo "==> Installing ZSA community modules…"
+  TMP=$(mktemp -d)
+  git clone --depth 1 https://github.com/zsa/qmk_modules.git "$TMP"
+  mkdir -p "$QMK_DIR/modules/zsa"
+  cp -r "$TMP/oryx"    "$QMK_DIR/modules/zsa/oryx"
+  cp -r "$TMP/defaults" "$QMK_DIR/modules/zsa/defaults"
+  rm -rf "$TMP"
+fi
+
+# ── 4. avr-gcc 16 compatibility patches ──────────────────────────────────────
+# send_string.c: needs avr/io.h for TCNT registers (implicit in older gcc)
+if ! grep -q "avr/io.h" "$QMK_DIR/quantum/send_string/send_string.c"; then
+  echo "==> Patching send_string.c (avr/io.h for TCNT registers)…"
+  sed -i 's|^#include "send_string.h"$|#include "send_string.h"\n#ifdef __AVR__\n#    include <avr/io.h>\n#endif|' \
+    "$QMK_DIR/quantum/send_string/send_string.c"
+fi
+
+# lufa.c: unused ConfigSuccess variable is now -Werror in gcc 16
+if ! grep -q "(void)ConfigSuccess" "$QMK_DIR/tmk_core/protocol/lufa/lufa.c"; then
+  echo "==> Patching lufa.c (suppress unused-variable warning)…"
+  sed -i 's|usb_device_state_set_configuration(USB_DeviceState == DEVICE_STATE_Configured, USB_Device_ConfigurationNumber);|usb_device_state_set_configuration(USB_DeviceState == DEVICE_STATE_Configured, USB_Device_ConfigurationNumber);\n    (void)ConfigSuccess;|' \
+    "$QMK_DIR/tmk_core/protocol/lufa/lufa.c"
+fi
+
+# ── 5. Keymap files ───────────────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+KEYMAP_SRC="$DOTFILES_DIR/config/.config/ergodox/keymap-custom"
+
+if [[ -d "$KEYMAP_SRC" ]]; then
+  echo "==> Copying keymap from dotfiles…"
+  mkdir -p "$KEYMAP_DIR"
+  cp -r "$KEYMAP_SRC/." "$KEYMAP_DIR/"
+elif [[ ! -d "$KEYMAP_DIR" ]]; then
+  echo "ERROR: No keymap source found at $KEYMAP_SRC" >&2
+  echo "       Place keymap.c, config.h, rules.mk, keymap.json there," >&2
+  echo "       or copy them manually to $KEYMAP_DIR" >&2
+  exit 1
+fi
+
+# ── 6. Compile ────────────────────────────────────────────────────────────────
+echo "==> Compiling…"
+qmk compile -kb zsa/ergodox_ez/m32u4/glow -km custom
+
+echo ""
+echo "==> Firmware: $HEX"
+ls -lh "$HEX"
+
+# ── 7. Flash (optional) ───────────────────────────────────────────────────────
+if [[ "$FLASH" == "true" ]]; then
+  if ! command -v wally-cli &>/dev/null; then
+    echo "ERROR: wally-cli not found. Install it from https://www.zsa.io/flash" >&2
+    exit 1
+  fi
+  echo ""
+  echo "==> Flashing with wally-cli…"
+  echo "    Press the reset button on the bottom of the keyboard when prompted."
+  wally-cli "$HEX"
+fi
