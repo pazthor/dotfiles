@@ -12,17 +12,57 @@
 	name = Julio Cesar
 	email = hi.pazthor@gmail.com
 [core]
+	editor = nvim
 	excludesfile = /home/pazthor/Code/dotfiles-omarchy/.config/git/.gitignore_global
 
+[status]
+	short = true
+	branch = true
+	showStash = true
+
+[branch]
+	sort = -committerdate
+
+[tag]
+	sort = version:refname
+
+[fetch]
+	prune = true
+	pruneTags = true
+
+[push]
+	default = current
+	autoSetupRemote = true
+
+[rebase]
+	autoStash = true
+	updateRefs = true
+
+[rerere]
+	enabled = true
+	autoupdate = true
+
+[commit]
+	verbose = true
+
+[column]
+	ui = auto
+
+[color]
+	ui = auto
+
 [diff]
-  tool = nvimdiff
+	tool = nvimdiff
+	algorithm = histogram
+	colorMoved = zebra
+	mnemonicPrefix = true
 
 [difftool]
-  prompt = false
+	prompt = false
 
 [merge]
-  tool = nvimdiff
+	tool = nvimdiff
+	conflictStyle = zdiff3
 
 [mergetool]
-  prompt = false
-
+	prompt = false
