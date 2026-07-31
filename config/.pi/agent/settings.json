@@ -6,8 +6,8 @@
     "npm:pi-cursor-sdk",
     "npm:pi-claude-cli"
   ],
-  "defaultProvider": "pi-claude-cli",
-  "defaultModel": "claude-sonnet-4-6",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "high",
   "theme": "light",
   "lastChangelogVersion": "0.80.3",
