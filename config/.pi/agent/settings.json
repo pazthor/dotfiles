@@ -4,13 +4,14 @@
     "npm:pi-subagents",
     "npm:@devkade/pi-plan",
     "npm:pi-cursor-sdk",
-    "npm:pi-claude-cli"
+    "npm:pi-claude-cli",
+    "git:github.com/nagisanzenin/engram"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "high",
-  "theme": "light",
-  "lastChangelogVersion": "0.80.3",
+  "theme": "dark",
+  "lastChangelogVersion": "0.80.7",
   "enabledModels": [
     "openai-codex/gpt-5.3-codex-spark",
     "openai-codex/gpt-5.4",
