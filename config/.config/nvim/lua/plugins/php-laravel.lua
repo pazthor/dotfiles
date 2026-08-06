@@ -1,3 +1,5 @@
+local intelephense_licence = vim.fn.expand("~/intelephense/global/license.txt")
+
 return {
   {
     "neovim/nvim-lspconfig",
@@ -5,6 +7,9 @@ return {
       servers = {
         phpactor = { enabled = false },
         intelephense = {
+          init_options = {
+            licenceKey = intelephense_licence,
+          },
           settings = {
             intelephense = {
               files = { maxSize = 2000000 },
