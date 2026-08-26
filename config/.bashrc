@@ -18,7 +18,9 @@ source ~/.local/share/omarchy/default/bash/rc
 CARGO="$HOME/.cargo/bin"
 export DOTFILES_PATH="$HOME/Code/dotfiles"
 export PATH="$DOTFILES_PATH/bin:$HOME/.config/composer/vendor/bin:$PATH:$HOME/Code/dotfiles-omarchy/bin/:$CARGO"
-source ~/.config/op/plugins.sh
+if [ -f ~/.config/op/plugins.sh ]; then
+    source ~/.config/op/plugins.sh
+fi
 export CURSOR_AGENT_PATH=/usr/bin/cursor-agent
 
 # Project shortcuts
