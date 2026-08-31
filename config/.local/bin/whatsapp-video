@@ -63,11 +63,17 @@ main() {
         ;;
       --output)
         shift || die "missing value for --output"
+        [[ $# -gt 0 ]] || die "missing value for --output"
         output=$1
         ;;
       --max-size)
         shift || die "missing value for --max-size"
+        [[ $# -gt 0 ]] || die "missing value for --max-size"
         max_size_mb=$1
+        ;;
+      --)
+        shift
+        break
         ;;
       --*)
         die "unknown option '$1'"
@@ -79,6 +85,14 @@ main() {
         input=$1
         ;;
     esac
+    shift
+  done
+
+  while (($#)); do
+    if [[ -n "${input}" ]]; then
+      die "only one input file supported"
+    fi
+    input=$1
     shift
   done
 

@@ -77,14 +77,21 @@ main() {
   while (($#)); do
     case "$1" in
       --help|-h) usage; exit 0 ;;
-      --output)  shift || die "missing value for --output"; output=$1 ;;
-      --max-size) shift || die "missing value for --max-size"; max_size_mb=$1 ;;
+      --output)  shift || die "missing value for --output"; [[ $# -gt 0 ]] || die "missing value for --output"; output=$1 ;;
+      --max-size) shift || die "missing value for --max-size"; [[ $# -gt 0 ]] || die "missing value for --max-size"; max_size_mb=$1 ;;
       --keep-open) keep_open="always" ;;
+      --) shift; break ;;
       --*) die "unknown option '$1'" ;;
       *)
         [[ -z "${url}" ]] || die "only one URL supported"
         url=$1 ;;
     esac
+    shift
+  done
+
+  while (($#)); do
+    [[ -z "${url}" ]] || die "only one URL supported"
+    url=$1
     shift
   done
 
