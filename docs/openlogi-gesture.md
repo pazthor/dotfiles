@@ -64,6 +64,14 @@ tail -f ~/.local/state/openlogi-gesture-poc.log
 Press the Gesture Button and hold it while swiping up, down, left, and right.
 Each arm must produce a distinct notification and log entry.
 
+If the agent reports `OS input hook installed` and
+`control capture active ... gesture_sources=1`, but no PoC log entry appears
+after a physical press, the config and Linux permissions are not the blocker.
+OpenLogi's gesture-capture implementation is then dropping the HID++ event;
+reboots and changing the Hyprland command cannot repair that path. Compare the
+agent log with the upstream gesture-capture reports before continuing to tune
+the command mapping.
+
 ## Test the Hyprland actions
 
 Verify the commands manually inside the active Hyprland session:

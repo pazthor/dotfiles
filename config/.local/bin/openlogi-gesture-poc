@@ -33,6 +33,9 @@ Stages:
   builtin    Use OpenLogi's built-in ShowDesktop action to test mapping load.
   notify     Run this helper and show a notification for every gesture arm.
   hyprland   Run this helper, notify, and dispatch the matching Hyprland action.
+
+The apply stages use the schema-7 `GestureButton` direction table. The
+installed OpenLogi 0.8.3 rejects the older `gesture_owner` field.
 USAGE
 }
 
@@ -322,7 +325,11 @@ binding_action() {
       printf '%s = "ShowDesktop"\n' "$label"
       ;;
     notify|hyprland)
-      printf '%s = { RunShellCommand = "%s %s" }\n' "$label" "$HELPER_PATH" "$arm"
+      if [[ $stage == hyprland ]]; then
+        printf '%s = { RunShellCommand = "%s hyprland %s" }\n' "$label" "$HELPER_PATH" "$arm"
+      else
+        printf '%s = { RunShellCommand = "%s event %s" }\n' "$label" "$HELPER_PATH" "$arm"
+      fi
       ;;
     *) die "unknown apply stage: $stage" ;;
   esac
