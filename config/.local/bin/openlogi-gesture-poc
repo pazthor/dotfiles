@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# OpenLogi MX Master 3S gesture proof of concept.
+#
+# The event subcommands are intentionally small: OpenLogi invokes them through
+# RunShellCommand, so they must work with the user service's minimal PATH.
+
+readonly CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/openlogi/config.toml"
+readonly STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}"
+readonly LOG_PATH="$STATE_DIR/openlogi-gesture-poc.log"
+readonly HELPER_PATH="${HOME}/.local/bin/openlogi-gesture-poc"
+readonly HYPRCTL_PATH="/usr/bin/hyprctl"
+readonly NOTIFY_SEND_PATH="/usr/bin/notify-send"
+readonly SERVICE_NAME="openlogi-agent.service"
+readonly EXPECTED_SERIAL="serial:2545zap0s928"
+
+declare -i failures=0
+
+usage() {
+  cat <<'USAGE'
+Usage:
+  openlogi-gesture-poc check
+  openlogi-gesture-poc service
+  openlogi-gesture-poc apply builtin
+  openlogi-gesture-poc apply notify
+  openlogi-gesture-poc apply hyprland
+  openlogi-gesture-poc restore /path/to/config.toml.poc.TIMESTAMP
+  openlogi-gesture-poc event click|up|down|left|right
+  openlogi-gesture-poc hyprland click|up|down|left|right
+
+Stages:
+  builtin    Use OpenLogi's built-in ShowDesktop action to test mapping load.
+  notify     Run this helper and show a notification for every gesture arm.
+  hyprland   Run this helper, notify, and dispatch the matching Hyprland action.
+USAGE
+}
+
+die() {
+  printf 'Error: %s\n' "$*" >&2
+  exit 1
+}
+
+pass() {
+  printf 'OK: %s\n' "$*"
+}
+
+warn() {
+  printf 'WARN: %s\n' "$*"
+}
+
+fail() {
+  printf 'FAIL: %s\n' "$*"
+  failures+=1
+}
+
+valid_arm() {
+  case ${1:-} in
+    click|up|down|left|right) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+arm_label() {
+  case $1 in
+    click) printf 'Click' ;;
+    up) printf 'Up' ;;
+    down) printf 'Down' ;;
+    left) printf 'Left' ;;
+    right) printf 'Right' ;;
+  esac
+}
+
+log_event() {
+  local arm=$1 message=${2:-}
+  mkdir -p -- "$STATE_DIR"
+  printf '%s arm=%s%s\n' "$(date --iso-8601=seconds)" "$arm" "$message" >> "$LOG_PATH"
+}
+
+notify_event() {
+  local title=${1:-OpenLogi} body=${2:-}
+  if [[ -x $NOTIFY_SEND_PATH ]]; then
+    "$NOTIFY_SEND_PATH" --app-name=OpenLogi "$title" "$body" >/dev/null 2>&1 || true
+  fi
+}
+
+run_event() {
+  local arm=$1
+  valid_arm "$arm" || die "unknown gesture arm: $arm"
+  log_event "$arm"
+  notify_event 'OpenLogi gesture PoC' "Gesture Button: $(arm_label "$arm")"
+}
+
+run_hyprland() {
+  local arm=$1 command_output
+  valid_arm "$arm" || die "unknown gesture arm: $arm"
+
+  run_event "$arm"
+  [[ -x $HYPRCTL_PATH ]] || die "hyprctl is not installed at $HYPRCTL_PATH"
+
+  case $arm in
+    click)
+      if "$HYPRCTL_PATH" dispatch togglespecialworkspace scratchpad; then return 0; else command_output=$?; fi
+      ;;
+    up)
+      if "$HYPRCTL_PATH" dispatch workspace e+1; then return 0; else command_output=$?; fi
+      ;;
+    down)
+      if "$HYPRCTL_PATH" dispatch workspace e-1; then return 0; else command_output=$?; fi
+      ;;
+    left)
+      if "$HYPRCTL_PATH" dispatch movefocus l; then return 0; else command_output=$?; fi
+      ;;
+    right)
+      if "$HYPRCTL_PATH" dispatch movefocus r; then return 0; else command_output=$?; fi
+  esac
+  log_event "$arm" " hyprctl_exit=$command_output"
+  notify_event 'OpenLogi gesture PoC' "Hyprland command failed for $(arm_label "$arm")"
+  return "$command_output"
+}
+
+find_device_key() {
+  local line current_key='' in_identity=0
+  local -a matches=()
+
+  [[ -f $CONFIG_PATH ]] || die "OpenLogi config not found: $CONFIG_PATH"
+
+  while IFS= read -r line; do
+    if [[ $line =~ ^\[devices\.\"([^\"]+)\"\.identity\][[:space:]]*$ ]]; then
+      current_key=${BASH_REMATCH[1]}
+      in_identity=1
+      continue
+    fi
+
+    if [[ $line == \[* ]]; then
+      in_identity=0
+      continue
+    fi
+
+    if (( in_identity )) && [[ $line == 'codename = "MX Master 3S"' ]]; then
+      matches+=("$current_key")
+      in_identity=0
+    fi
+  done < "$CONFIG_PATH"
+
+  if (( ${#matches[@]} == 1 )); then
+    printf '%s\n' "${matches[0]}"
+    return 0
+  fi
+
+  if (( ${#matches[@]} == 0 )) && grep -qF "[devices.\"$EXPECTED_SERIAL\"" "$CONFIG_PATH"; then
+    printf '%s\n' "$EXPECTED_SERIAL"
+    return 0
+  fi
+
+  if (( ${#matches[@]} > 1 )); then
+    printf 'Error: found multiple MX Master 3S device entries:\n' >&2
+    printf '  %s\n' "${matches[@]}" >&2
+  else
+    printf 'Error: could not find an MX Master 3S entry in %s\n' "$CONFIG_PATH" >&2
+  fi
+  return 1
+}
+
+check_service_state() {
+  local enabled active
+
+  if ! enabled=$(systemctl --user is-enabled "$SERVICE_NAME" 2>/dev/null); then
+    fail "user service is not enabled; run: systemctl --user enable --now $SERVICE_NAME"
+  elif [[ $enabled == enabled || $enabled == static || $enabled == indirect ]]; then
+    pass "user service enabled state: $enabled"
+  else
+    fail "user service enabled state: $enabled"
+  fi
+
+  if ! active=$(systemctl --user is-active "$SERVICE_NAME" 2>/dev/null); then
+    fail "user service is not active; run: systemctl --user start $SERVICE_NAME"
+  elif [[ $active == active ]]; then
+    pass 'openlogi-agent user service is active'
+  else
+    fail "user service active state: $active"
+  fi
+}
+
+check_permissions() {
+  local node properties device_path found_input=0 found_hidraw=0
+
+  if [[ -e /dev/uinput && -r /dev/uinput && -w /dev/uinput ]]; then
+    pass '/dev/uinput is readable and writable'
+  else
+    fail '/dev/uinput is not readable and writable for this user'
+  fi
+
+  while IFS= read -r node; do
+    [[ -r $node ]] || continue
+    properties=$(udevadm info --query=property --name="$node" 2>/dev/null || true)
+    device_path=$(udevadm info --query=path --name="$node" 2>/dev/null || true)
+    if grep -qFx 'ID_INPUT_MOUSE=1' <<< "$properties" && {
+      grep -qFx 'ID_VENDOR_ID=046d' <<< "$properties" ||
+      [[ $device_path == *046D:* || $device_path == *046d:* ]];
+    }; then
+      found_input=1
+      break
+    fi
+  done < <(find /dev/input -maxdepth 1 -type c -name 'event*' 2>/dev/null | sort)
+
+  if (( found_input )); then
+    pass 'a Logitech mouse event node is readable'
+  else
+    fail 'no readable Logitech mouse event node found under /dev/input'
+  fi
+
+  while IFS= read -r node; do
+    if [[ -r $node && -w $node ]]; then
+      found_hidraw=1
+      break
+    fi
+  done < <(find /dev -maxdepth 1 -type c -name 'hidraw*' 2>/dev/null | sort)
+
+  if (( found_hidraw )); then
+    pass 'a hidraw node is readable and writable'
+  else
+    fail 'no readable and writable hidraw node found under /dev'
+  fi
+}
+
+check_logs() {
+  local latest_log line start_line hook_line recent_log
+  latest_log=''
+  while IFS= read -r line; do
+    latest_log=$line
+    break
+  done < <(find "$STATE_DIR/openlogi" -maxdepth 1 -type f -name 'agent*.log' -printf '%T@ %p\n' 2>/dev/null | sort -nr | cut -d' ' -f2-)
+
+  if [[ -z $latest_log ]]; then
+    warn "no OpenLogi agent log found under $STATE_DIR/openlogi"
+    return
+  fi
+
+  start_line=$(grep -nF 'openlogi_agent::lifecycle: openlogi-agent started' "$latest_log" | tail -n 1 | cut -d: -f1 || true)
+  hook_line=$(grep -nF 'OS input hook installed' "$latest_log" | tail -n 1 | cut -d: -f1 || true)
+  if [[ -n $start_line && -n $hook_line && $hook_line -gt $start_line ]]; then
+    pass "agent log confirms OS input hook installation: $latest_log"
+  else
+    fail "latest agent start does not confirm OS input hook installation: $latest_log"
+  fi
+
+  if [[ -n $start_line ]]; then
+    recent_log=$(tail -n +"$start_line" "$latest_log")
+    if grep -qF 'no mouse device found under /dev/input' <<< "$recent_log" || grep -qF 'Permission denied' <<< "$recent_log"; then
+      fail "agent log contains input/device permission errors after the latest agent start: $latest_log"
+    fi
+  fi
+}
+
+check() {
+  local device_key openlogi_version list_output udev_rule
+
+  printf 'OpenLogi gesture PoC diagnostics\n'
+  printf 'Config: %s\n' "$CONFIG_PATH"
+
+  if [[ -f $CONFIG_PATH && ! -L $CONFIG_PATH ]]; then
+    pass 'OpenLogi config is a regular file'
+  elif [[ -L $CONFIG_PATH ]]; then
+    fail 'config.toml is a symlink; OpenLogi may replace it during atomic writes'
+  else
+    fail "OpenLogi config is missing: $CONFIG_PATH"
+  fi
+
+  if device_key=$(find_device_key); then
+    pass "MX Master 3S device key: $device_key"
+  else
+    failures+=1
+  fi
+
+  if openlogi_version=$(openlogi --version 2>&1); then
+    pass "$(head -n 1 <<< "$openlogi_version")"
+  else
+    fail 'openlogi command is unavailable'
+  fi
+
+  if list_output=$(openlogi list 2>&1); then
+    if grep -qiF 'MX Master 3S' <<< "$list_output"; then
+      pass 'openlogi list detects MX Master 3S'
+    else
+      warn 'openlogi list ran but did not print MX Master 3S'
+    fi
+  else
+    warn "openlogi list could not query the device: $(tail -n 1 <<< "$list_output")"
+  fi
+
+  udev_rule=/etc/udev/rules.d/70-openlogi.rules
+  if [[ -r $udev_rule ]] && grep -qF 'TAG+="uaccess"' "$udev_rule"; then
+    pass "OpenLogi udev rule is installed: $udev_rule"
+  else
+    fail "OpenLogi udev rule is missing or does not grant uaccess: $udev_rule"
+  fi
+
+  check_permissions
+  check_service_state
+  check_logs
+
+  if (( failures > 0 )); then
+    printf 'Diagnostics failed: %d check(s) need attention.\n' "$failures"
+    return 1
+  fi
+  printf 'Diagnostics passed.\n'
+}
+
+service() {
+  systemctl --user daemon-reload
+  systemctl --user enable --now "$SERVICE_NAME"
+  systemctl --user --no-pager status "$SERVICE_NAME"
+}
+
+binding_action() {
+  local stage=$1 arm=$2 label
+  label=$(arm_label "$arm")
+
+  case $stage in
+    builtin)
+      printf '%s = "ShowDesktop"\n' "$label"
+      ;;
+    notify|hyprland)
+      printf '%s = { RunShellCommand = "%s %s" }\n' "$label" "$HELPER_PATH" "$arm"
+      ;;
+    *) die "unknown apply stage: $stage" ;;
+  esac
+}
+
+replace_gesture_section() {
+  local device_key=$1 stage=$2 tmp backup header awk_status arm
+  local config_dir
+
+  [[ -f $CONFIG_PATH ]] || die "OpenLogi config not found: $CONFIG_PATH"
+  [[ ! -L $CONFIG_PATH ]] || die 'refusing to edit a symlinked config.toml'
+  [[ -x $HELPER_PATH ]] || die "helper is not linked/executable: $HELPER_PATH; run: just sync"
+
+  if pgrep -x openlogi-desktop >/dev/null 2>&1; then
+    die 'close the OpenLogi GUI before changing config.toml, then retry'
+  fi
+
+  config_dir=$(dirname -- "$CONFIG_PATH")
+  tmp=$(mktemp "$config_dir/.config.toml.gesture-poc.XXXXXX")
+  backup="$CONFIG_PATH.poc.$(date +%Y%m%d%H%M%S)"
+  while [[ -e $backup ]]; do
+    backup="$CONFIG_PATH.poc.$(date +%Y%m%d%H%M%S).$$"
+  done
+
+  header="[devices.\"$device_key\".bindings.GestureButton]"
+  set +e
+  awk -v target="$header" '
+    BEGIN { skipping = 0; found = 0 }
+    {
+      normalized = $0
+      sub(/[[:space:]]*\]$/, "]", normalized)
+      if (normalized == target) {
+        found++
+        skipping = 1
+        next
+      }
+      if (skipping && $0 ~ /^\[/) skipping = 0
+      if (!skipping) print
+    }
+    END {
+      if (found == 0) exit 43
+    }
+  ' "$CONFIG_PATH" > "$tmp"
+  awk_status=$?
+  set -e
+
+  if (( awk_status == 43 )); then
+    # A device with no gesture section is valid; append one below.
+    cp -- "$CONFIG_PATH" "$tmp"
+  elif (( awk_status != 0 )); then
+    rm -f -- "$tmp"
+    die 'could not safely locate the existing GestureButton section'
+  fi
+
+  {
+    printf '\n%s\n' "$header"
+    for arm in click up down left right; do
+      binding_action "$stage" "$arm"
+    done
+  } >> "$tmp"
+
+  cp -p -- "$CONFIG_PATH" "$backup"
+  chmod --reference="$CONFIG_PATH" "$tmp"
+  mv -- "$tmp" "$CONFIG_PATH"
+  printf 'Backup: %s\n' "$backup"
+  printf 'Applied %s GestureButton mapping for %s.\n' "$stage" "$device_key"
+
+  if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl --user restart "$SERVICE_NAME"
+    printf 'Restarted %s.\n' "$SERVICE_NAME"
+  else
+    warn "agent service is not active; restart it with: systemctl --user restart $SERVICE_NAME"
+  fi
+}
+
+apply_stage() {
+  local stage=$1 device_key
+  case $stage in
+    builtin|notify|hyprland) ;;
+    *) die 'apply stage must be builtin, notify, or hyprland' ;;
+  esac
+  device_key=$(find_device_key) || exit 1
+  replace_gesture_section "$device_key" "$stage"
+}
+
+restore_config() {
+  local backup=${1:-}
+  [[ -n $backup ]] || die 'restore requires a backup path'
+  [[ -f $backup ]] || die "backup not found: $backup"
+  [[ ! -L $CONFIG_PATH ]] || die 'refusing to restore into a symlinked config.toml'
+  cp -p -- "$CONFIG_PATH" "$CONFIG_PATH.before-restore.$(date +%Y%m%d%H%M%S)"
+  cp -p -- "$backup" "$CONFIG_PATH"
+  printf 'Restored %s\n' "$backup"
+  if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl --user restart "$SERVICE_NAME"
+  fi
+}
+
+command=${1:-}
+case $command in
+  check)
+    check
+    ;;
+  service)
+    service
+    ;;
+  apply)
+    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
+    apply_stage "$2"
+    ;;
+  restore)
+    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
+    restore_config "$2"
+    ;;
+  event)
+    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
+    run_event "$2"
+    ;;
+  hyprland)
+    [[ $# -eq 2 ]] || { usage >&2; exit 1; }
+    run_hyprland "$2"
+    ;;
+  -h|--help|'')
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 1
+    ;;
+esac
