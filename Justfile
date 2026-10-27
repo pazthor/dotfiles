@@ -38,3 +38,7 @@ verify path="":
 # download a video from copy url
 ydv:
     {{dotfiles}}/scripts/media/yt-dlp
+
+# Check received DNS servers and AdGuard filtering without changing the network
+test-adguard interface="wlp195s0" server="192.168.0.122":
+    @bash "{{dotfiles}}/scripts/system/test-adguard.sh" "{{interface}}" "{{server}}"
