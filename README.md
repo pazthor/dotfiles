@@ -55,6 +55,9 @@ just verify ~/.config/hypr/bindings.conf # preview a path mapping
 
 Run `just` with no arguments to see all available recipes.
 
+For home DNS diagnostics, run `just test-adguard` and see the
+[AdGuard findings and troubleshooting guide (Spanish)](docs/adguard-dns-debugging.md).
+
 ## Layout
 
 The repo uses a canonical package root model:
