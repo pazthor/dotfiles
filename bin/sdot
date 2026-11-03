@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-source "$HOME/Code/dotfiles/config/.bashrc"
+##? Usage: sdot [<context>] [<script>] [args...]
+##? Run the sibling dot dispatcher with the inherited environment.
+##? Does not load .bashrc or other shell startup files.
 
-##? dot, but without environment variables pre-loaded
-##?
-##? Same usage as dot
+main() {
+  local self
+  self=$(readlink -f -- "${BASH_SOURCE[0]}") || return 1
+  exec "${self%/*}/dot" "$@"
+}
 
-"$HOME/Code/dotfiles/bin/dot" "$@"
+main "$@"

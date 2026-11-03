@@ -93,9 +93,7 @@ with a wrapping function, `return` instead of `exit`, and `set` moved inside:
 #!/usr/bin/env bash
 
 _check_and_run() {
-  set -euo pipefail          # inside the function: affects only this scope
-                             # (in practice bash doesn't isolate set flags
-                             # inside functions either — still leaks)
+  set -euo pipefail          # still changes the calling shell options
 
   local required="${1:-}"
 
@@ -137,14 +135,13 @@ unset -f _cleanup
 return $exit_code
 ```
 
-**This works, but the cost is real:**
+**This is not a complete isolation solution:**
 
 - Every `exit` becomes `return` — you must remember this everywhere
 - `trap EXIT` is replaced by `trap RETURN` (different semantics, subtler bugs)
 - Every top-level variable must be `local` (otherwise it persists in the parent shell)
 - Every function defined in the script persists in the parent until `unset -f`
-- `set -euo pipefail` inside a function still leaks flags to the parent in some
-  bash versions
+- `set -euo pipefail` inside a function still changes the calling shell options
 - Scripts can no longer be run directly (`./scripts/install/check-and-run`) with
   the same behavior — `return` at the top level of a directly-executed script is
   an error
@@ -244,3 +241,17 @@ uses `exit` or leaks a variable.
 For a dotfiles setup where scripts manage files, install tools, and run
 commands — and don't need to modify the calling shell's state — subprocess
 execution is simpler, safer, and requires no special conventions.
+
+## Errexit is conditional
+
+A subprocess isolates shell state, but `set -e` does not exit on every failure.
+Commands used by `if`, `!`, `&&`, or `||` are exceptions; when a function is tested
+as a condition, its body may run with errexit ignored too. Command substitutions
+have additional errexit subtleties. A failure in `< <(producer)` does not become
+the status of the consuming loop or `mapfile`.
+
+Use explicit checks such as `result=$(operation) || return 1` for dependent steps.
+Capture expected nonzero statuses in `if command; then ...; else status=$?; ...; fi`.
+The toolkit uses checked pipelines with `pipefail` and `lastpipe` for file
+discovery, so failed Git commands cannot look like an empty, successful result.
+See [toolkit architecture](dot-architecture.md) for the actual helper contracts.

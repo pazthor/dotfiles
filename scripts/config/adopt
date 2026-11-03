@@ -1,192 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-##? Usage:
-##?   adopt <path>
-##?   adopt --verify [<path>]
-##?   adopt -h | --help
-##?
-##? Copy a home file into the repo, replace it with a symlink, and stage it.
-##?
-##? Options:
-##?   --verify   Print canonical mapping samples without importing.
-##?   -h         Show this help.
-##?
-##? Examples:
-##?   adopt ~/.config/hypr/bindings.conf
-##?   adopt --verify
-##?   adopt --verify ~/bin/my-helper
-
-SCRIPT_NAME=$(basename "$0")
-
-# Canonical package roots for import destinations.
-# Format: "<repo_package_root>:<filesystem_root>"
-readonly PACKAGE_ROOTS=(
-  "config:$HOME"
-)
-
-usage() {
-  cat >&2 <<USAGE
-Usage:
-  $SCRIPT_NAME /path/to/home/file
-  $SCRIPT_NAME --verify [/path/to/home/file]
-
-Options:
-  --verify   Print canonical mapping samples (and optional path mapping) without importing.
-
-Examples:
-  $SCRIPT_NAME ~/.config/hypr/bindings.conf
-  $SCRIPT_NAME --verify
-  $SCRIPT_NAME --verify ~/bin/my-helper
-USAGE
-}
+##? Usage: adopt <path> | adopt --verify [<path>]
+##? Copy a home file into config/, back up the original, symlink it, and git add it.
+##? --verify prints the home/repository mapping without changing files.
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/../.." && pwd)
+# shellcheck source=scripts/config/_paths.sh
+source "$script_dir/_paths.sh"
 
-normalize_path() {
-  local raw=$1
-  raw=${raw/#\~/$HOME}
-  readlink -f -- "$raw"
+usage() {
+  echo 'Usage: adopt <path> | adopt --verify [<path>]'
 }
 
-resolve_repo_path() {
-  local source_path=$1
-
-  if [[ "$source_path" == "$repo_root"/* ]]; then
-    echo "Error: input path is already inside this repository: $source_path" >&2
-    echo "Action: pass the real file in your home directory instead (for example ~/.config/...)." >&2
+main() {
+  local root source_path repo_path backup verify=0
+  root=$(cd -- "$script_dir/../.." && pwd -P) || return 1
+  case ${1:-} in
+    -h|--help) usage; return 0 ;;
+    --verify) verify=1; shift ;;
+  esac
+  if (( $# > 1 || (verify == 0 && $# != 1) )); then
+    usage >&2; return 1
+  fi
+  if (( verify )); then
+    printf '%s\n' 'Canonical mapping model: config/ -> $HOME' \
+      '  config/.config/hypr/hyprland.conf -> ~/.config/hypr/hyprland.conf' \
+      '  config/bin/my-script -> ~/bin/my-script' \
+      'scripts/ contains repository tooling; home scripts belong in config/.'
+    (( $# )) || return 0
+  fi
+  source_path=$(config_home_path "$1" "$HOME" "$root") || return 1
+  repo_path=$(config_repo_path "$source_path" "$HOME" "$root") || return 1
+  if (( verify )); then
+    printf 'Source:      %s\nRepo path:   %s\nHome target: %s\n' "$source_path" "$repo_path" "$source_path"
+    return 0
+  fi
+  if [[ -L "$source_path" || ! -f "$source_path" ]]; then
+    printf 'Error: expected a regular, non-symlink home file: %s\n' "$source_path" >&2
     return 1
   fi
-
-  local -a candidates=()
-  local entry pkg_root fs_root rel
-
-  for entry in "${PACKAGE_ROOTS[@]}"; do
-    pkg_root=${entry%%:*}
-    fs_root=${entry#*:}
-
-    if [[ "$source_path" == "$fs_root"/* ]]; then
-      rel=${source_path#"$fs_root/"}
-      candidates+=("$pkg_root/$rel")
-    fi
-  done
-
-  if (( ${#candidates[@]} == 0 )); then
-    echo "Error: unsupported path: $source_path" >&2
-    echo "Action: only files under declared package roots are supported:" >&2
-    printf '  - %s\n' "${PACKAGE_ROOTS[@]}" >&2
+  if [[ -e "$repo_path" || -L "$repo_path" ]]; then
+    printf 'Error: target already exists in repo: %s\n' "$repo_path" >&2
     return 1
   fi
-
-  if (( ${#candidates[@]} > 1 )); then
-    echo "Error: ambiguous mapping for path: $source_path" >&2
-    echo "Action: refine PACKAGE_ROOTS so each path matches exactly one mapping." >&2
-    printf 'Candidates:\n' >&2
-    printf '  - %s\n' "${candidates[@]}" >&2
-    return 1
-  fi
-
-  printf '%s\n' "${candidates[0]}"
+  backup=$(config_backup_path "$source_path") || return 1
+  mkdir -p -- "${repo_path%/*}" || return 1
+  cp -- "$source_path" "$repo_path" || return 1
+  mv -- "$source_path" "$backup" || return 1
+  ln -s -- "$repo_path" "$source_path" || return 1
+  git -C "$root" add -- "$repo_path" || return 1
+  printf 'Adopted: %s\nBackup:  %s\nRepo:    %s\n' "$source_path" "$backup" "$repo_path"
 }
 
-print_verify_samples() {
-  cat <<'SAMPLES'
-Canonical mapping model:
-  package root config/ -> $HOME
-
-Sample mappings:
-  config/.config/hypr/hyprland.conf -> ~/.config/hypr/hyprland.conf
-  config/bin/my-script -> ~/bin/my-script
-
-Scripts handling:
-  - scripts/ at repo root contains repository tooling (adopt-config, bootstrap, link-config, etc.).
-  - dotfiles intended for ~/bin, ~/.local/bin, etc. belong under config/ (for example config/bin/tool).
-SAMPLES
-}
-
-verify_mode=0
-input_arg=""
-
-case ${1:-} in
-  --verify)
-    verify_mode=1
-    shift
-    ;;
-  -h|--help)
-    usage
-    exit 0
-    ;;
-esac
-
-if [[ $# -gt 1 ]]; then
-  usage
-  exit 1
-fi
-
-if [[ $# -eq 1 ]]; then
-  input_arg=$1
-fi
-
-if (( verify_mode == 1 )); then
-  print_verify_samples
-  if [[ -n "$input_arg" ]]; then
-    if [[ ! -e "${input_arg/#\~/$HOME}" ]]; then
-      echo
-      echo "Path check: not found: ${input_arg/#\~/$HOME}" >&2
-      exit 1
-    fi
-    source_path=$(normalize_path "$input_arg")
-    repo_relative=$(resolve_repo_path "$source_path")
-    echo
-    echo "Resolved mapping preview:"
-    echo "  Source:      $source_path"
-    echo "  Repo path:   $repo_root/$repo_relative"
-    echo "  Home target: ${source_path}"
-  fi
-  exit 0
-fi
-
-if [[ -z "$input_arg" ]]; then
-  usage
-  exit 1
-fi
-
-input_path=${input_arg/#\~/$HOME}
-
-if [[ ! -e "$input_path" ]]; then
-  echo "Error: file not found: $input_path" >&2
-  exit 1
-fi
-
-if [[ -L "$input_path" ]]; then
-  echo "Error: already a symlink: $input_path" >&2
-  exit 1
-fi
-
-source_path=$(normalize_path "$input_path")
-repo_relative=$(resolve_repo_path "$source_path")
-repo_path="$repo_root/$repo_relative"
-repo_dir=$(dirname -- "$repo_path")
-
-mkdir -p -- "$repo_dir"
-
-if [[ -e "$repo_path" ]]; then
-  echo "Error: target already exists in repo: $repo_path" >&2
-  echo "Action: remove/move the existing tracked file, or import a different path." >&2
-  exit 1
-fi
-
-cp -- "$source_path" "$repo_path"
-
-timestamp=$(date +%Y%m%d%H%M%S)
-backup_path="$source_path.bak.$timestamp"
-
-mv -- "$source_path" "$backup_path"
-ln -s -- "$repo_path" "$source_path"
-
-git -C "$repo_root" add "$repo_path"
-
-echo "Adopted: $source_path"
-echo "Backup:  $backup_path"
-echo "Repo:    $repo_path"
+main "$@"

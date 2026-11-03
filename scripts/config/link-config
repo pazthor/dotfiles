@@ -1,130 +1,76 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-##? Usage:
-##?   link-config <path>
-##?   link-config --force <path>
-##?
-##? Re-link a single repo-tracked file to its home location as a symlink.
-##? The file must already be adopted (exist under config/ in the repo).
-##?
-##? Options:
-##?   --force   Skip confirmation when home file differs from repo file.
-##?
-##? Examples:
-##?   link-config ~/.config/hypr/input.conf
-##?   link-config --force ~/.config/hypr/input.conf
-
-SCRIPT_NAME=$(basename "$0")
-
-readonly PACKAGE_ROOTS=(
-  "config:$HOME"
-)
-
-usage() {
-  cat >&2 <<USAGE
-Usage:
-  $SCRIPT_NAME /path/to/home/file
-  $SCRIPT_NAME --force /path/to/home/file
-
-Link a repo-tracked file back to its home location as a symlink.
-The repo file must already exist under a tracked package root.
-
-Options:
-  --force   Skip confirmation when home file differs from repo file.
-
-Examples:
-  $SCRIPT_NAME ~/.config/hypr/input.conf
-  $SCRIPT_NAME --force ~/.config/hypr/input.conf
-USAGE
-}
+##? Usage: link-config [--force] <path>
+##? Link a file from config/ to its home location, backing up existing regular files.
+##? --force skips confirmation when contents differ; foreign symlinks are rejected.
+##? Exit status: 0 linked, 2 already linked or declined, 1 failed.
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/../.." && pwd)
+# shellcheck source=scripts/config/_paths.sh
+source "$script_dir/_paths.sh"
 
-normalize_path() {
-  local raw=$1
-  raw=${raw/#\~/$HOME}
-  python -c 'import os, sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$raw"
-}
-
-resolve_repo_path() {
-  local source_path=$1
-  local -a candidates=()
-  local entry pkg_root fs_root rel
-
-  for entry in "${PACKAGE_ROOTS[@]}"; do
-    pkg_root=${entry%%:*}
-    fs_root=${entry#*:}
-    if [[ "$source_path" == "$fs_root"/* ]]; then
-      rel=${source_path#"$fs_root/"}
-      candidates+=("$pkg_root/$rel")
-    fi
+main() {
+  local root home_path repo_path backup confirm status force=0
+  local -a paths=()
+  while (( $# )); do
+    case $1 in
+      --force) force=1 ;;
+      -h|--help) echo 'Usage: link-config [--force] <path>'; return 0 ;;
+      --) shift; paths+=("$@"); break ;;
+      -*) printf 'Error: unknown option: %s\n' "$1" >&2; return 1 ;;
+      *) paths+=("$1") ;;
+    esac
+    shift
   done
-
-  if (( ${#candidates[@]} == 0 )); then
-    echo "Error: unsupported path: $source_path" >&2
-    echo "Action: only files under declared package roots are supported:" >&2
-    printf '  - %s\n' "${PACKAGE_ROOTS[@]}" >&2
+  if (( ${#paths[@]} != 1 )); then echo 'Usage: link-config [--force] <path>' >&2; return 1; fi
+  root=$(cd -- "$script_dir/../.." && pwd -P) || return 1
+  home_path=$(config_home_path "${paths[0]}" "$HOME" "$root") || return 1
+  repo_path=$(config_repo_path "$home_path" "$HOME" "$root") || return 1
+  if [[ ! -f "$repo_path" ]]; then
+    printf 'Error: file not found in repo: %s (use dot config adopt first)\n' "$repo_path" >&2
     return 1
   fi
-
-  printf '%s\n' "${candidates[0]}"
+  if [[ -L "$home_path" ]]; then
+    if config_link_matches "$home_path" "$repo_path"; then
+      printf 'Already linked: %s -> %s\n' "$home_path" "$repo_path"
+      return 2
+    fi
+    printf 'Error: foreign or broken symlink: %s\n' "$home_path" >&2
+    return 1
+  fi
+  if [[ -e "$home_path" && ! -f "$home_path" ]]; then
+    printf 'Error: expected a regular file or missing path: %s\n' "$home_path" >&2
+    return 1
+  fi
+  if [[ -f "$home_path" ]]; then
+    if diff -q -- "$repo_path" "$home_path" >/dev/null; then
+      status=0
+    else
+      status=$?
+    fi
+    if (( status > 1 )); then
+      printf 'Error: could not compare %s\n' "$home_path" >&2
+      return 1
+    fi
+    if (( status == 1 )); then
+      diff --color=auto -u -- "$repo_path" "$home_path" || true
+      if (( ! force )); then
+        confirm=''
+        read -r -p 'Replace home file with symlink to repo? Repo version wins. [y/N] ' confirm || true
+        if [[ "$confirm" != y && "$confirm" != Y ]]; then
+          printf 'Skipped: %s\n' "$home_path"
+          return 2
+        fi
+      fi
+    fi
+    backup=$(config_backup_path "$home_path") || return 1
+    mv -- "$home_path" "$backup" || return 1
+    printf 'Backup: %s\n' "$backup"
+  fi
+  mkdir -p -- "${home_path%/*}" || return 1
+  ln -s -- "$repo_path" "$home_path" || return 1
+  printf 'Linked: %s -> %s\n' "$home_path" "$repo_path"
 }
 
-force=0
-input_arg=""
-
-while [[ $# -gt 0 ]]; do
-  case $1 in
-    --force) force=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    -*) echo "Error: unknown option: $1" >&2; usage; exit 1 ;;
-    *) input_arg=$1; shift ;;
-  esac
-done
-
-if [[ -z "$input_arg" ]]; then
-  usage
-  exit 1
-fi
-
-home_path=$(normalize_path "$input_arg")
-repo_relative=$(resolve_repo_path "$home_path")
-repo_path="$repo_root/$repo_relative"
-
-if [[ ! -f "$repo_path" ]]; then
-  echo "Error: file not tracked in repo: $repo_path" >&2
-  echo "Action: use 'dot config adopt' first to import it." >&2
-  exit 1
-fi
-
-if [[ -L "$home_path" ]]; then
-  current_target=$(readlink -f -- "$home_path")
-  if [[ "$current_target" == "$repo_path" ]]; then
-    echo "Already linked: $home_path -> $repo_path"
-    exit 0
-  fi
-  echo "Error: $home_path is already a symlink pointing elsewhere: $current_target" >&2
-  exit 1
-fi
-
-if [[ -f "$home_path" ]]; then
-  if ! diff -q -- "$repo_path" "$home_path" > /dev/null 2>&1; then
-    echo "Files differ:"
-    diff --color=auto -u "$repo_path" "$home_path" || true
-    echo
-    if (( force == 0 )); then
-      read -r -p "Replace home file with symlink to repo? Repo version wins. [y/N] " confirm
-      [[ "$confirm" =~ ^[Yy]$ ]] || { echo "Skipped: $home_path"; exit 2; }
-    fi
-  fi
-  timestamp=$(date +%Y%m%d%H%M%S)
-  backup_path="$home_path.bak.$timestamp"
-  mv -- "$home_path" "$backup_path"
-  echo "Backup: $backup_path"
-fi
-
-mkdir -p -- "$(dirname -- "$home_path")"
-ln -s -- "$repo_path" "$home_path"
-echo "Linked: $home_path -> $repo_path"
+main "$@"

@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cd -- "$root"
+files=(bin/dot bin/sdot scripts/config/_paths.sh scripts/config/adopt
+       scripts/config/adopt-verify scripts/config/unadopt scripts/config/link-config
+       scripts/config/bootstrap scripts/config/drift tests/run)
+for file in "${files[@]}"; do bash -n "$file"; done
+python3 tests/toolkit.py
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -x "${files[@]}"
+else
+  echo 'ShellCheck not installed; skipped.'
+fi

@@ -41,6 +41,16 @@ dot config     # fzf picker scoped to the config context
 The context prefix can be dropped when the script name is unambiguous:
 `dot drift`, `dot bootstrap --dry-run`, `dot adopt-verify` all work too.
 
+`dot --help` prints usage without requiring `fzf`. Only executable regular files
+at `scripts/<context>/<name>` are commands; `_`-prefixed helpers and contexts
+are private. `sdot` runs its sibling `dot` with the inherited environment, without
+loading `.bashrc`. `DOTFILES_PATH` can override the dispatcher's repository root.
+
+The picker splits arguments on whitespace without evaluating shell syntax or
+expanding wildcards. Use direct invocation for arguments containing spaces:
+`dot config adopt "$HOME/.config/my app/settings"`. Direct arguments and command
+exit statuses are preserved.
+
 ## Quick commands (just)
 
 If you have [just](https://github.com/casey/just) installed, these recipes wrap the common workflows:
@@ -73,8 +83,10 @@ The repo uses a canonical package root model:
 │   └── bin/
 │       └── ...
 └── scripts/
-    ├── adopt-config
-    └── adopt-verify
+    └── config/
+        ├── adopt
+        ├── adopt-verify
+        └── _paths.sh
 ```
 
 Examples:
@@ -181,3 +193,10 @@ separate packages to install.
 
 - Do not edit files inside `~/.local/share/omarchy/` (those are managed by Omarchy updates).
 - Use `git status` and `git commit` to version your changes when you’re ready.
+
+## Toolkit validation
+
+Run `just test` for syntax checks and isolated regression tests (Python 3 required).
+ShellCheck runs if installed. Tests use temporary homes and repositories, never
+your live configuration. See [toolkit architecture](docs/dot-architecture.md) for
+helper contracts, linking statuses, and error-handling details.

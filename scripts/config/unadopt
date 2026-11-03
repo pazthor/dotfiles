@@ -1,111 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-##? Usage:
-##?   unadopt <path>
-##?
-##? Remove a file from the repo and restore it as a plain file in $HOME.
-##? The symlink is replaced with a real copy. Run 'git commit' after.
-##?
-##? Examples:
-##?   unadopt ~/.config/nvim/lua/plugins/logs.lua
-##?   unadopt ~/.config/hypr/bindings.conf
-
-SCRIPT_NAME=$(basename "$0")
-
-readonly PACKAGE_ROOTS=(
-  "config:$HOME"
-)
-
-usage() {
-  cat >&2 <<USAGE
-Usage:
-  $SCRIPT_NAME /path/to/home/file
-
-Removes a file from the dotfiles repo and restores it as a plain file at its
-original home location. The symlink is replaced with a real copy of the file.
-
-Examples:
-  $SCRIPT_NAME ~/.config/nvim/lua/plugins/logs.lua
-  $SCRIPT_NAME ~/.config/hypr/bindings.conf
-USAGE
-}
+##? Usage: unadopt <path>
+##? Restore an adopted home symlink as a plain file and stage its repo removal.
+##? Only links to their expected config/ file are accepted. Commit the removal afterward.
 
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/../.." && pwd)
+# shellcheck source=scripts/config/_paths.sh
+source "$script_dir/_paths.sh"
 
-normalize_path() {
-  local raw=$1
-  raw=${raw/#\~/$HOME}
-  readlink -f -- "$raw"
-}
-
-resolve_repo_path() {
-  local source_path=$1
-  local -a candidates=()
-  local entry pkg_root fs_root rel
-
-  for entry in "${PACKAGE_ROOTS[@]}"; do
-    pkg_root=${entry%%:*}
-    fs_root=${entry#*:}
-
-    if [[ "$source_path" == "$fs_root"/* ]]; then
-      rel=${source_path#"$fs_root/"}
-      candidates+=("$pkg_root/$rel")
-    fi
-  done
-
-  if (( ${#candidates[@]} == 0 )); then
-    echo "Error: unsupported path: $source_path" >&2
-    echo "Action: only files under declared package roots are supported:" >&2
-    printf '  - %s\n' "${PACKAGE_ROOTS[@]}" >&2
+main() {
+  local root home_path repo_path temporary
+  case ${1:-} in -h|--help) echo 'Usage: unadopt <path>'; return 0 ;; esac
+  if (( $# != 1 )); then echo 'Usage: unadopt <path>' >&2; return 1; fi
+  root=$(cd -- "$script_dir/../.." && pwd -P) || return 1
+  home_path=$(config_home_path "$1" "$HOME" "$root") || return 1
+  repo_path=$(config_repo_path "$home_path" "$HOME" "$root") || return 1
+  if [[ ! -f "$repo_path" ]] || ! config_link_matches "$home_path" "$repo_path"; then
+    printf 'Error: expected a working symlink to %s: %s\n' "$repo_path" "$home_path" >&2
     return 1
   fi
-
-  printf '%s\n' "${candidates[0]}"
+  # Keep Git's protection against removing uncommitted work; do not force removal.
+  git -C "$root" rm --dry-run -- "$repo_path" >/dev/null || return 1
+  temporary=$(mktemp -- "$home_path.tmp.XXXXXX") || return 1
+  if ! cp -p -- "$repo_path" "$temporary"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  if ! git -C "$root" rm -- "$repo_path"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  if ! mv -T -- "$temporary" "$home_path"; then
+    printf 'Error: restored contents are preserved at %s\n' "$temporary" >&2
+    return 1
+  fi
+  printf 'Unadopted: %s\nRemoved:   %s\nRun git commit to record the removal.\n' "$home_path" "$repo_path"
 }
 
-case ${1:-} in
-  -h|--help)
-    usage
-    exit 0
-    ;;
-esac
-
-if [[ $# -ne 1 ]]; then
-  usage
-  exit 1
-fi
-
-input_path=${1/#\~/$HOME}
-
-if [[ ! -L "$input_path" ]]; then
-  if [[ ! -e "$input_path" ]]; then
-    echo "Error: file not found: $input_path" >&2
-  else
-    echo "Error: not a symlink: $input_path" >&2
-    echo "Action: only files already adopted (symlinked into the repo) can be unadopted." >&2
-  fi
-  exit 1
-fi
-
-source_path=$(normalize_path "$input_path")
-repo_relative=$(resolve_repo_path "$source_path")
-repo_path="$repo_root/$repo_relative"
-
-if [[ ! -f "$repo_path" ]]; then
-  echo "Error: file not found in repo: $repo_path" >&2
-  echo "Action: the symlink target is not tracked in this dotfiles repo." >&2
-  exit 1
-fi
-
-# Replace symlink with a real copy of the file
-cp -- "$repo_path" "${input_path}.tmp"
-rm -- "$input_path"
-mv -- "${input_path}.tmp" "$input_path"
-
-git -C "$repo_root" rm "$repo_path"
-
-echo "Unadopted: $input_path"
-echo "Removed:   $repo_path"
-echo "Run 'git commit' to record the removal."
+main "$@"

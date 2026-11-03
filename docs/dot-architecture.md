@@ -1,326 +1,147 @@
-# Dotfiles Architecture — Staff Engineer Study Guide
+# Dotfiles toolkit architecture
 
-## System Architecture
+The repository owns its Bash dispatcher and config-management scripts. There is
+no external Dotly dependency. GNU utilities and Bash are required; Git handles
+tracking, `fzf` is needed only for interactive selection, and `just` is optional.
+Python 3 is used by the regression tests, not by the toolkit itself.
 
-A single repo (`~/Code/dotfiles`) owns everything. The `dot` command is a
-44-line custom dispatcher that lives inside the repo itself — no external
-framework dependency.
+## Dispatch and wrappers
 
-```
-~/Code/dotfiles/
-├── bin/dot              ← the dispatcher (entry point)
-├── bin/sdot             ← env-free wrapper that sources .bashrc then calls dot
-├── config/              ← files symlinked into $HOME (config/.bashrc → ~/.bashrc, etc.)
-└── scripts/
-    ├── config/          ← dotfile management (adopt, bootstrap, drift, …)
-    ├── git/             ← git workflow helpers
-    ├── install/         ← one-time setup scripts
-    ├── media/           ← media download tools
-    └── system/          ← system-level setup
-```
+`bin/dot` discovers executable regular files at exactly
+`scripts/<context>/<name>`. Names and contexts beginning with `_` are private;
+symlinked commands, directories, and non-executable files are excluded. Listing,
+shortcuts, and explicit context dispatch use the same discovery result. Names
+are compared literally, including characters such as `.` and `[`.
 
-**Dispatch flow:**
+`dot <context> <script> [args...]` selects a command explicitly.
+`dot <script> [args...]` works when its name is unambiguous. Missing or ambiguous
+commands report an error. `dot` and `dot <context>` open an `fzf` picker. Missing
+`fzf` is reported without installing anything. Cancellation returns nonzero.
 
-```
-dot config adopt ~/.config/hypr/bindings.conf
-  → finds scripts/config/adopt (executable, depth 2)
-  → runs it as a subprocess with "$@"
-```
+The dispatcher resolves its own location using GNU `readlink -f`, which handles
+relative symlink chains. `DOTFILES_PATH` can override the discovered root.
+`sdot` resolves its own location and executes its sibling `dot`; it inherits the
+environment and does not source `.bashrc`.
 
-`DOTFILES_PATH` is either set in the environment or self-discovered by the
-dispatcher at runtime from its own location via `BASH_SOURCE`. No external
-framework, no second repo, no `DOTLY_PATH`.
+Selected commands run as separate processes with arguments in `"$@"`, and their
+exit status reaches the caller. `dot --help` prints the dispatcher's usage;
+`dot config adopt -h` extracts the command's `##?` comments without executing it.
 
----
-
-## Best Practices in Use
-
-### 1. `set -euo pipefail` on every script
+The picker reads a whitespace-separated argument array with `read -r -a`.
+It performs no shell evaluation, quote interpretation, variable substitution,
+or wildcard expansion. For arguments containing spaces, use direct invocation:
 
 ```bash
-set -euo pipefail
+dot config adopt "$HOME/.config/my app/settings"
 ```
 
-- `-e`: exit on any command failure — no silent swallowing of errors
-- `-u`: unset variables are errors, not empty strings (`rm -rf "$DIR/"` with
-  unset `$DIR` becomes `rm -rf /` without this flag)
-- `-o pipefail`: a pipe fails if any stage fails, not just the last one
+## Path contracts
 
-This is the baseline for production-quality bash. Every script in this repo
-has it.
+`scripts/config/_paths.sh` is a non-executable library. Sourcing it only defines
+functions: it does not inspect files, write data, change shell options, or assign
+global state. Helpers accept explicit arguments, use local variables, print
+results to stdout, send errors to stderr, and return a status.
 
-### 2. Two levels of self-location via `BASH_SOURCE`
+- `config_home_path INPUT HOME ROOT` expands a leading `~/` and lexically
+  normalizes the location using GNU `realpath -ms`. It does **not** follow the
+  final symlink. Paths must be inside home and outside the repository; resolved
+  parent directories are checked too, so directory aliases cannot bypass this.
+- `config_repo_path INPUT HOME ROOT` applies the single mapping
+  `$HOME/<relative>` → `<root>/config/<relative>`. It also rejects config parent
+  directories that escape the config tree through symlinks.
+- `config_link_matches HOME_PATH REPO_PATH` separately follows targets to check
+  whether an existing, working home symlink belongs to the expected file.
+- `config_tracked_files ROOT` emits Git's null-delimited config filenames and
+  preserves Git's failure status.
+- `config_backup_path PATH` selects a timestamped backup path and adds a suffix
+  when a backup with the same timestamp already exists.
 
-**In the dispatcher** (`bin/dot`) — self-discovers the repo root by following
-its own symlink chain:
+Keeping a link's location separate from its resolved target is essential:
+`unadopt ~/.config/app/file` maps the home location into `config/.config/app/file`,
+then validates the link. Mapping the resolved repository target would incorrectly
+produce a second `config/Code/dotfiles/...` path.
+
+Config entry points locate their library and repository relative to their own
+`scripts/config/` directory. This depth is an intentional layout contract.
+
+## Config operations
+
+`adopt` accepts a regular, non-symlink home file, refuses existing repository
+paths (including broken symlinks), copies the file, backs up the original, creates
+an absolute symlink, and stages the new file with Git.
+
+`adopt-verify` delegates to `adopt --verify`. It prints the same mapping used by
+adoption, linking, and unadoption, without writes. Missing paths and adopted
+symlinks can both be previewed.
+
+`unadopt` accepts only a working symlink to its expected repository file. It
+checks `git rm --dry-run` before changes, copies the contents into a unique
+sibling temporary file, stages removal with `git rm`, then replaces the home
+symlink with the copy. Git's protection for uncommitted changes remains enabled:
+commit an adoption or later edits before unadopting. Foreign and broken links
+are rejected. If final replacement fails, the temporary copy is retained and
+its location is reported.
+
+`link-config` has three outcomes:
+
+| Status | Meaning |
+| --- | --- |
+| 0 | Created a link |
+| 2 | Already linked, or replacement was declined (including prompt EOF) |
+| 1 | Failed |
+
+Existing regular files are backed up. Differing contents require confirmation
+unless `--force` is used. Foreign or broken symlinks are rejected even with
+`--force`. Direct callers must handle status 2 as a skip rather than a failure.
+
+`bootstrap` obtains the full tracked-file list before making changes, calls
+`link-config`, and counts these outcomes. It continues past per-file failures
+and returns failure when any operation fails. `__pycache__` entries are ignored.
+The summary includes the monitor override operation.
+
+The monitor destination `~/.config/hypr/monitors-local.conf` is managed separately:
+`monitors-local.<hostname>.conf` is selected if present, with
+`monitors-local.default.conf` as fallback. Existing monitor symlinks are refreshed
+without prompting, as before; existing regular monitor files are backed up.
+A missing monitor source is an error. `--dry-run` prints planned links without
+creating directories, links, backups, or temporary files.
+
+`drift` uses the shared mapping and link checks, retains `.driftignore` globs,
+and reports missing links, candidate regular files, and leftover backups.
+Repo-tracked symlinks remain excluded from target checks. Tracked files and
+managed-directory entries are enumerated with null delimiters so whitespace in
+filenames does not split entries. Git and directory-discovery failures are
+reported instead of being mistaken for a clean result.
+
+## Shell error handling
+
+`set -euo pipefail` is a useful baseline, not a complete error-handling strategy.
+`-e` has exceptions in `if`, `!`, `&&`, `||`, and other conditional contexts.
+Calling a function as an `if` condition can disable errexit throughout that
+function. Command substitutions also have errexit subtleties; a failing process
+substitution does not make its consuming loop fail.
+
+Helpers therefore explicitly check dependent operations and return failures.
+Bootstrap captures child statuses in an `if` and distinguishes skips from errors.
+Discovery uses a checked pipeline with `pipefail` and Bash `lastpipe`, which keeps
+`mapfile`'s array in the current shell. A partially failing Git command is rejected
+before its results are used. No failure is hidden behind `mapfile < <(git ...)`.
+
+Subprocess isolation protects the caller's shell state; it does not replace
+explicit error checks or transactional filesystem operations. Backups protect
+contents, but an I/O or Git staging failure can still leave partially completed
+work that must be inspected.
+
+## Validation
 
 ```bash
-_self="${BASH_SOURCE[0]}"
-while [[ -L "$_self" ]]; do _self="$(readlink -- "$_self")"; done
-export DOTFILES_PATH="${DOTFILES_PATH:-$(cd -- "$(dirname -- "$_self")/.." && pwd)}"
+just test
+just --list
 ```
 
-This means `dot` works correctly even when symlinked into `~/.local/bin/dot`
-or anywhere else in `$PATH` — no env var required.
-
-**In individual scripts** — self-locate relative to the script file:
-
-```bash
-script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-repo_root=$(cd -- "$script_dir/../.." && pwd)
-```
-
-The `cd && pwd` pattern resolves symlinks to an absolute path. `--` after
-`dirname` guards against directory names starting with `-`. `BASH_SOURCE[0]`
-is used instead of `$0` because `$0` breaks when a script is sourced.
-
-### 3. `##?` comment blocks for inline help
-
-Every script opens with `##?` lines that describe its usage:
-
-```bash
-##? Usage:
-##?   adopt <path>
-##?   adopt --verify [<path>]
-##?
-##? Options:
-##?   --verify   Preview mapping without importing.
-```
-
-The dispatcher intercepts `-h` / `--help` before calling the script and
-extracts these lines with a single grep — no external tool needed:
-
-```bash
-_help() { grep "^##?" "$1" 2>/dev/null | cut -c 5- || true; }
-```
-
-Running `dot config adopt -h` prints the help. Adding help to a new script
-requires zero changes to the dispatcher — just write the `##?` lines.
-
-Scripts also keep a `usage()` function for direct invocation (`./scripts/config/adopt -h`).
-Both coexist: `##?` serves `dot`, `usage()` serves direct calls.
-
-### 4. Always subprocess — never source
-
-The dispatcher always runs scripts as child processes:
-
-```bash
-"$target" "$@"    # fork → child runs → child exits → parent continues
-```
-
-It never uses `. "$target"` (source). This means:
-
-- `exit` in any script terminates the child, not the shell
-- `set -euo pipefail` at the top of a script affects only that child
-- Scripts are fully isolated — no side effects on the calling environment
-
-This is the reason the scripts can use `exit 1` and `set -euo pipefail` freely
-without any special conventions.
-
-### 5. Idempotency as a first-class design goal
-
-Every state-changing script is safe to re-run:
-
-- `bootstrap` — checks if already linked before linking
-- `adopt` — refuses to overwrite an existing repo file
-- `install/dot` — bootstrap is itself idempotent
-- `link-config` — detects "already linked" as a distinct non-error exit code
-
-This is the property that makes automation trustworthy. A script you can only
-run once is a liability.
-
-### 6. Semantic exit codes
-
-`link-config` uses three exit codes with distinct meanings:
-
-- `0` — linked successfully
-- `1` — error
-- `2` — skipped (already correctly linked)
-
-`bootstrap` calls `link-config` in a loop and counts each outcome separately,
-reporting `linked=N skipped=N failed=N`. Callers react to exit codes, not
-parsed output.
-
-### 7. Stderr for diagnostics, stdout for data
-
-```bash
-echo "Error: unsupported path: $source_path" >&2   # stderr: human message
-printf '%s\n' "${candidates[0]}"                    # stdout: machine-usable result
-```
-
-Errors go to stderr. Usable output goes to stdout. Safe to pipe: `dot config
-adopt-verify | grep config` never mixes error messages into the data stream.
-
-### 8. Backup before destructive operations
-
-```bash
-timestamp=$(date +%Y%m%d%H%M%S)
-backup_path="$source_path.bak.$timestamp"
-mv -- "$source_path" "$backup_path"
-```
-
-`adopt` and `link-config` never delete — they rename with a timestamp. `drift`
-surfaces these as `leftover:` entries. The chain: backup → operate → user
-reviews → user deletes. No data loss path.
-
-### 9. `git -C <path>` instead of `cd`
-
-```bash
-git -C "$repo_root" add "$repo_path"
-git -C "$repo_root" ls-files -- 'config/'
-```
-
-Never `cd` inside a script that other scripts call. `-C` runs git in a
-specific directory without changing the process working directory. Composable,
-no side effects.
-
-### 10. `readonly` on constants
-
-```bash
-readonly PACKAGE_ROOTS=(
-  "config:$HOME"
-)
-```
-
-Prevents accidental mutation later in the script. Used on constants that define
-the script's core behavior — package roots, repo names, etc.
-
----
-
-## Philosophy / Mental Models
-
-### Convention over configuration
-
-The dispatcher works because everyone agrees: scripts live at
-`scripts/<context>/<name>`, are executable files, and nothing else. No
-registry, no manifest, no config file. The filesystem *is* the configuration.
-Add a script and it immediately appears in `dot` and the FZF picker.
-
-The depth constraint (exactly 2 levels, `-mindepth 2 -maxdepth 2`) is part of
-the convention. Violate it and the script disappears silently — a deliberate
-trade-off: simple discovery in exchange for a structural rule you internalize
-once.
-
-The `_*` filename prefix is the escape hatch: files named `_lib.sh` are not
-executable by convention so `find -perm /+111` skips them, making them safe
-as shared library includes invisible to `dot`.
-
-### Locality — scripts own their own paths
-
-No script depends on `DOTFILES_PATH` being set to find its siblings.
-`bootstrap` calls `$script_dir/link-config`, not
-`$DOTFILES_PATH/scripts/config/link-config`. Move the repo and everything
-still works because scripts navigate relative to themselves.
-
-The dispatcher is the only code that needs `DOTFILES_PATH` — and it
-self-discovers it, so even that dependency is eliminated at the entry point.
-
-### Composition over monolith
-
-`bootstrap` doesn't implement linking — it calls `link-config` in a loop.
-`adopt-verify` doesn't implement verification — it calls `adopt --verify`.
-Each script has one job. You can call any piece independently. This is Unix
-philosophy: small tools that compose.
-
-### Idempotency enables automation
-
-Any script safe to re-run multiple times can go in CI, in an installer, or be
-called by accident. The install script, bootstrap, and adopt are all
-idempotent. This is what separates "scripts" from "automation."
-
-### Subprocess isolation keeps scripts simple
-
-Because the dispatcher always forks, scripts never need to worry about
-cleaning up after themselves or avoiding `exit`. Each script can be written
-as if it owns the process — because it does.
-
----
-
-## Open Issues (still worth fixing)
-
-### 1. `link-config` uses Python for path normalization
-
-`adopt` and `unadopt` use `readlink -f`:
-```bash
-normalize_path() { readlink -f -- "$raw"; }
-```
-
-`link-config` uses Python:
-```bash
-normalize_path() {
-  python -c 'import os, sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$raw"
-}
-```
-
-`readlink -f` follows symlinks to the final target; `os.path.abspath` doesn't.
-This is a latent inconsistency — fix `link-config` to match its siblings.
-
-### 2. `PACKAGE_ROOTS` is copy-pasted into three scripts
-
-`adopt`, `link-config`, and `unadopt` each declare:
-```bash
-readonly PACKAGE_ROOTS=("config:$HOME")
-```
-
-Adding a second package root requires updating three files. The fix is a
-shared non-executable library:
-
-```bash
-# scripts/config/_lib.sh  (chmod -x, invisible to dot)
-PACKAGE_ROOTS=("config:$HOME")
-```
-
-Then each script sources it. The `_*` prefix keeps it out of the FZF picker.
-
-### 3. `$script_dir/../..` is depth-coupled
-
-Config scripts compute repo root as:
-```bash
-repo_root=$(cd -- "$script_dir/../.." && pwd)
-```
-
-This only works at exactly `scripts/config/<name>`. A script at
-`scripts/config/utils/<name>` silently resolves to the wrong directory.
-
-A more robust alternative walks upward looking for `.git`:
-
-```bash
-find_repo_root() {
-  local dir=$1
-  while [[ "$dir" != "/" ]]; do
-    [[ -d "$dir/.git" ]] && { echo "$dir"; return; }
-    dir=$(dirname "$dir")
-  done
-  return 1
-}
-repo_root=$(find_repo_root "$script_dir")
-```
-
----
-
-## What Was Resolved
-
-| Issue | Resolution |
-|---|---|
-| `yt-dlp` was a notes file with no shebang | Rewritten as a real script taking a URL argument |
-| dotly was a dormant external dependency | Replaced with a 44-line custom dispatcher in `bin/dot` |
-| `DOTLY_PATH` hardcoded in two files | Removed entirely — no external framework |
-| dotly HTTPS clone in install script | Install script removed clone step — nothing to clone |
-| PATH order put dotly before dotfiles | Fixed — `$DOTFILES_PATH/bin` now comes first |
-
----
-
-## The Core Insight
-
-The dispatcher implements a plugin architecture in 44 lines:
-
-```
-scripts/<context>/<name>  →  executable file  →  appears in dot
-```
-
-No registration. No config. No framework to update. Adding a script adds a
-capability. Removing a script removes it. The filesystem is the source of
-truth.
-
-**The best architectures are the ones where adding a feature requires adding
-a file, not modifying existing code.**
+`just test` runs Bash syntax checks and the Python standard-library regression
+suite. Tests copy toolkit files into temporary repositories with isolated home
+directories and stubbed external commands; they never link into the real home or
+stage the real repository. ShellCheck runs when installed. Tests cover dispatch,
+wrappers, path mappings, adoption round trips, backups, foreign/broken links,
+bootstrap counts, monitor selection, dry runs, and discovery failures.

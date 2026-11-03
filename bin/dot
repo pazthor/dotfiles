@@ -1,74 +1,114 @@
 #!/usr/bin/env bash
 set -euo pipefail
+shopt -s lastpipe
 
-# Self-discovery: find DOTFILES_PATH from this script's own location.
-# Works whether called directly or via a symlink anywhere in PATH.
-_self="${BASH_SOURCE[0]}"
-while [[ -L "$_self" ]]; do _self="$(readlink -- "$_self")"; done
-export DOTFILES_PATH="${DOTFILES_PATH:-$(cd -- "$(dirname -- "$_self")/.." && pwd)}"
+##? Usage: dot [<context>] [<script>] [args...]
+##? Run a script by context/name or by its unambiguous name.
+##? With no script, open the fzf picker (fzf is only needed for selection).
+##? Use dot <context> <script> -h to read a script's ##? help comments.
+##? Picker arguments are split on whitespace; quotes and globs are literal.
+##? For arguments containing spaces, invoke directly: dot config adopt "path with spaces"
+##? DOTFILES_PATH overrides the discovered repository root.
 
-# List all executable scripts at exactly depth 2, skipping _* (library files)
-_list() {
-  find "$DOTFILES_PATH/scripts" \
-    -mindepth 2 -maxdepth 2 -perm /111 -type f ! -name "_*" 2>/dev/null | sort
+show_help() {
+  local file=$1 line
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" == '##?'* ]] || continue
+    line=${line#'##?'}
+    printf '%s\n' "${line# }"
+  done < "$file"
 }
 
-# Print ##? comment lines as help text — no docpars required
-# Returns 0 even when no ##? lines exist (grep exits 1 on no match)
-_help() { grep "^##?" "$1" 2>/dev/null | cut -c 5- || true; }
-
-# Resolve the absolute path to a script
-_resolve() { echo "$DOTFILES_PATH/scripts/$1/$2"; }
-
-# Find scripts matching a bare name across every context (flat dispatch)
-_flat_matches() { _list | grep "/${1}\$"; }
-
-# FZF interactive picker over a newline-separated list of absolute script paths
-_pick() {
-  local path entries script args
-  entries=""
-  while IFS= read -r path; do
-    [[ -z "$path" ]] && continue
-    entries+="$(basename -- "$(dirname -- "$path")") $(basename -- "$path")"$'\n'
-  done <<<"$1"
-  script="$(
-    printf '%s' "$entries" |
-      fzf --height 100% \
-          --preview '"$DOTFILES_PATH/bin/dot" $(echo {} | cut -d" " -f1) $(echo {} | cut -d" " -f2) -h'
-  )" || return 1
-  read -r -p "> " args || true
-  # shellcheck disable=SC2086
-  "$DOTFILES_PATH/bin/dot" $script ${args:-}
+list_commands() {
+  local root=$1 entry
+  find "$root/scripts" -mindepth 2 -maxdepth 2 -type f -executable \
+    ! -name '_*' -printf '%P\0' | sort -z |
+    while IFS= read -r -d '' entry; do
+      [[ ${entry%%/*} == _* ]] && continue
+      printf '%s\0' "$entry"
+    done
 }
 
-case "${1:-}" in
-  "")        _pick "$(_list)" ;;
-  -h|--help) _help "${BASH_SOURCE[0]}" ;;
-  *)
-    if [[ -d "$DOTFILES_PATH/scripts/$1" ]]; then
-      # dot <context> [script] [args...]
-      if [[ $# -eq 1 ]]; then
-        _pick "$(_list | grep "/${1}/")"
-        exit
-      fi
-      context="$1" script="$2"; shift 2
-      target="$(_resolve "$context" "$script")"
-      [[ ! -x "$target" ]] && { echo "Error: $context/$script not found" >&2; exit 1; }
-      [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
-      "$target" "$@"
-    else
-      # dot <script> [args...] — flat dispatch: find <script> in any context
-      name="$1"; shift
-      mapfile -t matches < <(_flat_matches "$name")
-      case "${#matches[@]}" in
-        0) echo "Error: no script named '$name' found" >&2; exit 1 ;;
-        1) target="${matches[0]}"
-           [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && { _help "$target"; exit; }
-           "$target" "$@" ;;
-        *) echo "Error: '$name' is ambiguous, matches:" >&2
-           printf '  %s\n' "${matches[@]}" >&2
-           exit 1 ;;
-      esac
+pick_command() {
+  local root=$1 selected target
+  shift
+  local -a choices=() args=()
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo 'Error: interactive selection requires fzf; install it or invoke a script directly.' >&2
+    return 1
+  fi
+  if (( $# == 0 )); then
+    echo 'Error: no commands available.' >&2
+    return 1
+  fi
+  # shellcheck disable=SC2016 # Expanded by the fzf preview shell.
+  if ! printf '%s\0' "$@" | fzf --read0 --print0 --height 100% \
+      --preview 'sed -n "s/^##? *//p" "$DOTFILES_PATH/scripts/"{}' |
+      mapfile -d '' -t choices; then
+    return 1
+  fi
+  [[ ${#choices[@]} == 1 && -n ${choices[0]} ]] || return 1
+  selected=${choices[0]}
+  # Only execute an entry from the discovery result.
+  for target in "$@"; do
+    [[ "$selected" == "$target" ]] || continue
+    IFS=$' \t\n' read -r -a args -p '> ' || true
+    "$root/scripts/$target" "${args[@]}"
+    return $?
+  done
+  echo 'Error: invalid picker selection.' >&2
+  return 1
+}
+
+main() {
+  local self root context name target entry
+  local -a commands=() matches=() scoped=()
+  self=$(readlink -f -- "${BASH_SOURCE[0]}") || return 1
+  if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+    show_help "$self"
+    return
+  fi
+  root=$(realpath -e -- "${DOTFILES_PATH:-${self%/*}/..}") || return 1
+  export DOTFILES_PATH="$root"
+  if ! list_commands "$root" | mapfile -d '' -t commands; then
+    echo "Error: cannot discover commands in $root/scripts" >&2
+    return 1
+  fi
+  if (( $# == 0 )); then
+    pick_command "$root" "${commands[@]}"
+    return $?
+  fi
+  context=$1
+  if [[ "$context" != */* && "$context" != _* && -d "$root/scripts/$context" ]]; then
+    shift
+    for entry in "${commands[@]}"; do
+      [[ ${entry%/*} == "$context" ]] && scoped+=("$entry")
+    done
+    if (( $# == 0 )); then
+      pick_command "$root" "${scoped[@]}"
+      return $?
     fi
-    ;;
-esac
+    name=$1; shift
+    for entry in "${scoped[@]}"; do
+      [[ ${entry##*/} == "$name" ]] && matches+=("$entry")
+    done
+  else
+    name=$1; shift
+    for entry in "${commands[@]}"; do
+      [[ ${entry##*/} == "$name" ]] && matches+=("$entry")
+    done
+  fi
+  case ${#matches[@]} in
+    0) printf "Error: no script named '%s' found in the selected context(s).\n" "$name" >&2; return 1 ;;
+    1) target="$root/scripts/${matches[0]}" ;;
+    *) printf "Error: '%s' is ambiguous, matches:\n" "$name" >&2
+       printf '  %s\n' "${matches[@]}" >&2; return 1 ;;
+  esac
+  if [[ ${1:-} == -h || ${1:-} == --help ]]; then
+    show_help "$target"
+    return
+  fi
+  exec "$target" "$@"
+}
+
+main "$@"

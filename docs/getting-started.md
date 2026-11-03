@@ -63,7 +63,14 @@ For the pi coding agent (install, auth, skills), see [pi-setup.md](pi-setup.md).
 ## Daily usage with `dot`
 
 `dot` is the main script dispatcher. All scripts in `scripts/<context>/<name>` are
-reachable as `dot <context> <name>`.
+reachable as `dot <context> <name>` when they are executable regular files.
+Private `_`-prefixed helpers and contexts are excluded.
+`dot --help` and direct commands do not require `fzf`.
+
+The picker accepts whitespace-separated arguments; quotes, variables, and globs
+are literal. For paths with spaces, invoke directly:
+`dot config adopt "$HOME/.config/my app/settings"`.
+`sdot` is a sibling wrapper around `dot` and does not source `.bashrc`.
 
 ```bash
 dot                                          # FZF picker: all scripts
@@ -137,6 +144,7 @@ just sync        # links newly added files and repairs missing links
 | `just update` | `git pull --rebase`, then re-link new/missing configs |
 | `just adopt <path>` | Adopt a file into the repo |
 | `just verify [path]` | Preview path mapping |
+| `just test` | Run isolated toolkit regression tests and syntax checks |
 | `just ydv` | Download a video from a copied URL |
 
 ---
@@ -178,11 +186,13 @@ scripts/config/help     # print the full tutorial
 ## Troubleshooting
 
 **`bootstrap` reports `skipped` files**
-Files already correctly symlinked are skipped — that is expected. `failed`
-counts are the ones to investigate.
+Files already correctly symlinked and declined replacements are skipped.
+The summary includes the hostname-selected monitor override. `failed` counts
+are the ones to investigate. Direct `link-config` returns 0 for linked, 2 for
+skipped, and 1 for failed.
 
 **A home file differs from the repo version**
-`bootstrap`/`link-config` refuse to clobber it by default. Inspect the
+`bootstrap`/`link-config` ask for confirmation before replacing a differing regular file. Inspect the
 difference, then re-run with `--force` once you're sure the repo copy should win.
 
 **A config file I edited isn't tracked yet**
@@ -191,3 +201,14 @@ Adopt it first with `dot config adopt <path>`, then commit.
 **`dot` command not found after bootstrap**
 Run `source ~/.bashrc`. `DOTFILES_PATH` is set there and `$DOTFILES_PATH/bin`
 (which contains `dot`) is prepended to `PATH`.
+
+### Stop managing a file
+
+```bash
+dot config unadopt "$HOME/.config/my app/settings"
+```
+
+Commit adoption or subsequent edits first: unadopt keeps Git's protection
+against removing uncommitted contents. It restores the home symlink as a regular
+file and stages the repository deletion. Foreign or broken links are rejected.
+Commit the removal afterward.
