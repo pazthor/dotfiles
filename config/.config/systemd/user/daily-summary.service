@@ -1,0 +1,5 @@
+[Unit]
+Description=End-of-day work summary
+[Service]
+Type=oneshot
+ExecStart=%h/bin/daily-summary.sh

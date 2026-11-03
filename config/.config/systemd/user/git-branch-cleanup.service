@@ -1,0 +1,6 @@
+[Unit]
+Description=Delete stale merged git branches
+
+[Service]
+Type=oneshot
+ExecStart=%h/bin/git-branch-cleanup.sh --apply

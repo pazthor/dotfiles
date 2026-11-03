@@ -1,0 +1,6 @@
+[Unit]
+Description=Monthly local invoice log
+[Service]
+Type=oneshot
+ExecStartPre=%h/bin/weekly-cleanup.sh
+ExecStart=%h/bin/monthly-invoices.py

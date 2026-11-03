@@ -1,0 +1,5 @@
+[Unit]
+Description=Weekly cleanup of screenshots and WhatsApp videos
+[Service]
+Type=oneshot
+ExecStart=%h/bin/weekly-cleanup.sh
