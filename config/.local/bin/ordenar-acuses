@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# ordenar-acuses: mueve Acuse.PAMJ910503PH0*.pdf de ~/Downloads a ~/Documents/SAT/AAAA-MM/
+# con el formato Nombre-con-guiones_AAAA-MM-DD_HHMMSS.pdf (fecha de descarga).
+set -euo pipefail
+src="${1:-$HOME/Downloads}"; dest="$HOME/Documents/SAT"
+shopt -s nullglob
+files=("$src"/Acuse.PAMJ910503PH0*.pdf)
+(( ${#files[@]} )) || { echo "No hay acuses en $src"; exit 0; }
+for f in "${files[@]}"; do
+  base=$(basename "$f" .pdf); name=${base//./-}
+  stamp=$(date -r "$f" +%Y-%m-%d_%H%M%S); month=$(date -r "$f" +%Y-%m)
+  mkdir -p "$dest/$month"
+  out="$dest/$month/${name}_${stamp}.pdf"
+  [[ -e "$out" ]] && { echo "Ya existe, lo dejo: $out"; continue; }
+  mv -n "$f" "$out" && echo "$(basename "$f") -> ${out/#$HOME/~}"
+done

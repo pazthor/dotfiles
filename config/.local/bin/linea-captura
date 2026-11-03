@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# linea-captura: extrae la línea de captura, el importe y la vigencia
+# del acuse de declaración del SAT más reciente (o del PDF que le pases).
+# Uso: linea-captura [archivo.pdf | carpeta]   (por defecto el más reciente en ~/Downloads o ~/Documents/SAT)
+set -euo pipefail
+
+command -v pdftotext >/dev/null || { echo "Falta pdftotext (instala poppler-utils)" >&2; exit 1; }
+
+newest() { find "$@" -maxdepth 2 -iname 'Acuse*.pdf' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-; }
+if [[ $# -eq 0 ]]; then
+  pdf=$(newest "$HOME/Downloads" "$HOME/Documents/SAT")
+elif [[ -d "$1" ]]; then
+  pdf=$(newest "$1")
+else
+  pdf="$1"
+fi
+[[ -n "$pdf" ]] || { echo "No encontré ningún Acuse*.pdf" >&2; exit 1; }
+[[ -f "$pdf" ]] || { echo "No existe: $pdf" >&2; exit 1; }
+
+text=$(pdftotext -layout "$pdf" -)
+section=$(printf '%s\n' "$text" | sed -n '/LÍNEA DE CAPTURA/,$p')
+
+linea=$(printf '%s\n' "$section" | grep -oE '[0-9A-Z]{4}( [0-9A-Z]{4}){4}' | head -n1 || true)
+importe=$(printf '%s\n' "$section" | grep -oE '\$[0-9,]+(\.[0-9]{2})?' | head -n1 || true)
+vigente=$(printf '%s\n' "$section" | grep -oE 'Vigente hasta: *[0-9]{2}/[0-9]{2}/[0-9]{4}' | grep -oE '[0-9]{2}/[0-9]{2}/[0-9]{4}' | head -n1 || true)
+presentada=$(printf '%s\n' "$text" | grep -oE 'presentación: *[0-9]{2}/[0-9]{2}/[0-9]{4}' | grep -oE '[0-9]{2}/[0-9]{2}/[0-9]{4}' | head -n1 || true)
+
+if [[ -z "$linea" ]]; then
+  echo "Archivo: $(basename "$pdf")"
+  echo "Este acuse no trae línea de captura (puede que no haya impuesto a cargo)."
+  exit 2
+fi
+
+echo "Archivo:          $(basename "$pdf")"
+[[ -n "$presentada" ]] && echo "Presentada:       $presentada"
+echo "Línea de captura: $linea"
+echo "Sin espacios:     ${linea// /}"
+[[ -n "$importe" ]] && echo "Importe a pagar:  $importe"
+
+if [[ -n "$vigente" ]]; then
+  IFS=/ read -r d m y <<<"$vigente"
+  hoy=$(date +%s -d "$(date +%F)")
+  vence=$(date +%s -d "$y-$m-$d")
+  dias=$(( (vence - hoy) / 86400 ))
+  if (( dias < 0 )); then
+    echo "Vigente hasta:    $vigente  ⚠️  VENCIDA hace $(( -dias )) día(s). Genera una nueva línea en el SAT."
+    exit 3
+  elif (( dias == 0 )); then
+    echo "Vigente hasta:    $vigente  ⚠️  ¡Vence HOY!"
+  elif (( dias <= 3 )); then
+    echo "Vigente hasta:    $vigente  ⚠️  Quedan $dias día(s)."
+  else
+    echo "Vigente hasta:    $vigente  (quedan $dias días)"
+  fi
+fi
