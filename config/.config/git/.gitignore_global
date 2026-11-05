@@ -13,3 +13,6 @@ node_modules
 
 specs.md
 *.specs.md
+
+# Playwright CLI output (may contain credentials)
+.playwright-cli/

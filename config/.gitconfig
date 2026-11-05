@@ -13,7 +13,7 @@
 	email = hi.pazthor@gmail.com
 [core]
 	editor = nvim
-	excludesfile = /home/pazthor/Code/dotfiles-omarchy/.config/git/.gitignore_global
+	excludesfile = ~/Code/dotfiles/config/.config/git/.gitignore_global
 
 [status]
 	short = true
