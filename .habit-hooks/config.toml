@@ -1,0 +1,5 @@
+plugins = ["python", "typescript", "generic"]
+
+# Mixed-language plugin scopes are combined; Ruff must only receive Python files.
+[sensors.ruff]
+files = ["**/*.py"]

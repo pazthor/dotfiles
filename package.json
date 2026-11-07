@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "eslint": "^10.14.0",
+    "jscpd": "^5.4.2",
+    "knip": "^6.44.1",
+    "ts-morph": "^28.0.0"
+  }
+}
